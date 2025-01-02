@@ -12,16 +12,16 @@ export async function PUT(req: Request) {
 
     const data = await req.json();
     
-    const validatedData = {
-      name: data.name,
-      phoneNumber: data.phoneNumber || null,
-      age: data.age ? parseInt(data.age) : null,
-      educationLevel: data.educationLevel || null,
-      preferredLanguage: data.preferredLanguage || null,
-      learningStyle: data.learningStyle || null,
-      difficultyPreference: data.difficultyPreference || null,
-      interests: data.interests || [],
-    };
+    // Add validation
+    if (!data.name) {
+      return new Response(JSON.stringify({ error: "Name is required" }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Log the data before update
+    console.log("Updating user with data:", validatedData);
 
     const updatedUser = await prisma.user.update({
       where: { email: session.user.email },
@@ -32,8 +32,11 @@ export async function PUT(req: Request) {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error("Profile update error:", error);
-    return new Response(JSON.stringify({ error: "Error updating profile" }), { 
+    console.error("Detailed profile update error:", error);
+    return new Response(JSON.stringify({ 
+      error: "Error updating profile",
+      details: error.message 
+    }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

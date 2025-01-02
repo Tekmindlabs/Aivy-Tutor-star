@@ -33,7 +33,6 @@ export async function POST(req: NextRequest) {
         id: true,
         age: true,
         interests: true,
-        // Only include these if you've added them to your schema
         educationLevel: true,
         learningStyle: true,
         difficultyPreference: true,
@@ -48,6 +47,15 @@ export async function POST(req: NextRequest) {
     }
 
     const { messages } = await req.json();
+
+    // Validate messages
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return new Response(JSON.stringify({ error: "Invalid messages format" }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
     
     const { stream, handlers } = LangChainStream({
@@ -75,11 +83,22 @@ export async function POST(req: NextRequest) {
           }
         };
 
-        const emotionalState = await createEmotionalAgent(model)(initialState);
-        const researchState = await createResearcherAgent(model)(emotionalState);
-        const validatedState = await createValidatorAgent(model)(researchState);
+        // Add timeout handling for agent calls
+        const timeoutDuration = 30000; // 30 seconds
+        const withTimeout = <T>(promise: Promise<T>) => {
+          return Promise.race([
+            promise,
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Request timeout')), timeoutDuration)
+            )
+          ]);
+        };
 
-        const response = await model.generateContent({
+        const emotionalState = await withTimeout(createEmotionalAgent(model)(initialState));
+        const researchState = await withTimeout(createResearcherAgent(model)(emotionalState));
+        const validatedState = await withTimeout(createValidatorAgent(model)(researchState));
+
+        const response = await withTimeout(model.generateContent({
           contents: [
             { role: "system", parts: [{ text: userContext }]},
             { role: "system", parts: [{ text: JSON.stringify(validatedState.context.analysis) }]},
@@ -89,39 +108,40 @@ export async function POST(req: NextRequest) {
             temperature: 0.7,
             maxOutputTokens: 1000,
           }
-        });
+        }));
 
         const result = await response.response;
         const text = result.text();
 
-        // Update chat creation to match your schema
-        await prisma.chat.create({
-          data: {
-            userId: user.id,
-            message: messages[messages.length - 1].content,
-            response: text,
-            // Only include fields that exist in your Chat model
-            metadata: {
-              emotionalState: validatedState.emotionalState,
-              analysis: validatedState.context.analysis
-            }
-          },
-        });
+        // Create chat record with error handling
+        try {
+          await prisma.chat.create({
+            data: {
+              userId: user.id,
+              message: messages[messages.length - 1].content,
+              response: text,
+              metadata: {
+                emotionalState: validatedState.emotionalState,
+                analysis: validatedState.context.analysis
+              }
+            },
+          });
+        } catch (dbError) {
+          console.error("Error saving chat to database:", dbError);
+          // Continue with response even if DB save fails
+        }
 
-        // Fix handlers calls
-        await handlers.handleLLMNewToken(text, {
+        // Send response tokens
+        const messageData = {
           id: crypto.randomUUID(),
           role: 'assistant',
           content: text,
           createdAt: new Date().toISOString()
-        });
+        };
 
-        await handlers.handleLLMEnd({
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: text,
-          createdAt: new Date().toISOString()
-        });
+        await handlers.handleLLMNewToken(text, messageData);
+        await handlers.handleLLMEnd(messageData);
+
       } catch (error) {
         console.error("Error in chat processing:", error);
         handlers.handleLLMError(error as Error);
@@ -129,9 +149,13 @@ export async function POST(req: NextRequest) {
     })();
 
     return new StreamingTextResponse(stream);
+    
   } catch (error) {
     console.error("Error in chat route:", error);
-    return new Response(JSON.stringify({ error: "Internal server error" }), { 
+    return new Response(JSON.stringify({ 
+      error: "Internal server error",
+      details: error instanceof Error ? error.message : "Unknown error"
+    }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
