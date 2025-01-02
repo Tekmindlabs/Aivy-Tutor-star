@@ -110,6 +110,17 @@ export async function POST(req: NextRequest) {
           }
         }));
 
+      } catch (error) {
+        console.error("AI model error:", error);
+        return new Response(JSON.stringify({ 
+          error: "AI processing error",
+          details: error instanceof Error ? error.message : "Unknown error"
+        }), { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
         const result = response.response;
         const text = result.text();
 
