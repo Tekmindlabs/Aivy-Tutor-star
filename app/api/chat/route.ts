@@ -53,22 +53,27 @@ export async function POST(req: NextRequest) {
       const greetingMessage = getGreeting(userName);
       
       // Store greeting in chat history
-      await prisma.chat.create({
+      const chatRecord = await prisma.chat.create({
         data: {
           userId: user.id,
           message: "Initial greeting",
           response: greetingMessage,
         },
       });
-
+    
+      // Return in the expected format with a unique ID
       return new Response(
         JSON.stringify({
+          id: chatRecord.id, // Use the database record ID
           role: "assistant",
           content: greetingMessage,
         }),
         { 
           status: 200,
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store, no-cache, must-revalidate'
+          }
         }
       );
     }

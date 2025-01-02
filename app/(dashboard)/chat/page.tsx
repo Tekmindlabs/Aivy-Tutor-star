@@ -6,18 +6,21 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatMessage } from "@/components/chat/chat-message";
-import { useSession } from "next-auth/react";
 
 export default function ChatPage() {
-  const { data: session } = useSession();
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     api: "/api/chat",
-    initialMessages: [], // Empty to trigger the greeting from the API
-    onResponse(response) {
-      const chatContainer = document.getElementById('chat-container');
-      if (chatContainer) {
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-      }
+    initialMessages: [],
+    initialInput: "",
+    id: "greeting",
+    body: {
+      messages: []
+    },
+    onFinish: (message) => {
+      console.log("Chat finished:", message);
+    },
+    onError: (error) => {
+      console.error("Chat error:", error);
     }
   });
 
@@ -26,7 +29,6 @@ export default function ChatPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold">AI Companion Chat</h1>
       </div>
-      
       <Card className="flex h-[600px] flex-col">
         <ScrollArea className="flex-1 p-4" id="chat-container">
           <div className="space-y-4">
@@ -39,7 +41,6 @@ export default function ChatPage() {
             ))}
           </div>
         </ScrollArea>
-
         <div className="border-t p-4">
           <form onSubmit={handleSubmit} className="flex gap-2">
             <Input
