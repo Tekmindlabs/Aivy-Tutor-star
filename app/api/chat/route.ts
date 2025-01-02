@@ -41,7 +41,6 @@ const getGreeting = (userName: string) => {
 
 export async function POST(req: NextRequest) {
   try {
-    // Session handling
     const session = await getSession();
     console.log("Session data:", session);
 
@@ -50,21 +49,17 @@ export async function POST(req: NextRequest) {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    // User verification
     const user = await prisma.user.findUnique({
       where: { email: session.user.email }
     });
-    console.log("Found user:", user);
 
     if (!user?.id) {
       return new Response("User not found", { status: 404 });
     }
 
-    // Message processing
     const { messages }: { messages: ChatCompletionMessage[] } = await req.json();
-    console.log("Received messages:", messages);
-
-    // Initial greeting
+    
+    // For initial greeting
     if (!messages?.length) {
       const userName = session.user.name 
         ? session.user.name.split(' ')[0]
@@ -72,7 +67,6 @@ export async function POST(req: NextRequest) {
         ?? 'there';
       
       const greetingMessage = getGreeting(userName);
-      console.log("Generated greeting:", greetingMessage);
       
       try {
         const chatRecord = await prisma.chat.create({
@@ -82,7 +76,6 @@ export async function POST(req: NextRequest) {
             response: greetingMessage.content,
           },
         });
-        console.log("Created greeting record:", chatRecord);
 
         return new Response(
           JSON.stringify({
@@ -91,11 +84,7 @@ export async function POST(req: NextRequest) {
             content: greetingMessage.content,
           }),
           { 
-            status: 200,
-            headers: { 
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-store, no-cache, must-revalidate'
-            }
+            headers: { 'Content-Type': 'application/json' }
           }
         );
       } catch (error) {
@@ -104,67 +93,44 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Chat handling
     const lastMessage = messages[messages.length - 1].content;
-    console.log("Processing message:", lastMessage);
-
     const { stream, handlers } = LangChainStream();
 
     // Create chat record
-    let chat;
-    try {
-      chat = await prisma.chat.create({
-        data: {
-          userId: user.id,
-          message: lastMessage,
-          response: "",
-        },
-      });
-      console.log("Created chat record:", chat);
-    } catch (error) {
-      console.error("Error creating chat record:", error);
-      throw error;
-    }
+    const chat = await prisma.chat.create({
+      data: {
+        userId: user.id,
+        message: lastMessage,
+        response: "",
+      },
+    });
 
     // Process in background
     (async () => {
       try {
         const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-        console.log("Initialized Gemini model");
-
-        // Include message history
-        const messageHistory = messages.map(msg => ({
-          role: msg.role,
-          parts: [{ text: msg.content }]
-        }));
 
         const response = await model.generateContent({
-          contents: [
-            ...messageHistory,
-            { role: "user", parts: [{ text: lastMessage }]}
-          ],
+          contents: [{ role: "user", parts: [{ text: lastMessage }]}],
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 1000,
           }
         });
-        console.log("Received AI response");
 
         const result = await response.response;
         const text = result.text();
-        console.log("Processed text:", text);
 
-        // Stream response
-        const chunks = text.split(/(\n\n|\n(?=[#-]))/);
+        // Format the stream chunks properly
+        const chunks = text.split(' ').map(word => ({
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: word + ' ',
+          createdAt: new Date().toISOString()
+        }));
+
         for (const chunk of chunks) {
-          if (chunk.trim()) {
-            try {
-              await handlers.handleLLMNewToken(chunk);
-              console.log("Streamed chunk:", chunk);
-            } catch (error) {
-              console.error("Error streaming chunk:", error);
-            }
-          }
+          await handlers.handleLLMNewToken(JSON.stringify(chunk));
         }
 
         // Update chat record
@@ -172,24 +138,11 @@ export async function POST(req: NextRequest) {
           where: { id: chat.id },
           data: { response: text },
         });
-        console.log("Updated chat record");
 
         await handlers.handleLLMEnd();
-
       } catch (error) {
         console.error("Generation error:", error);
-        
-        const errorMessage = error instanceof Error 
-          ? `Error: ${error.message}`
-          : "An unexpected error occurred";
-
-        await handlers.handleLLMNewToken(errorMessage);
-        await handlers.handleLLMEnd();
-
-        await prisma.chat.update({
-          where: { id: chat.id },
-          data: { response: errorMessage },
-        });
+        await handlers.handleLLMError(error as Error);
       }
     })();
 
