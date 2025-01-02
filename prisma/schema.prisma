@@ -22,6 +22,11 @@ model User {
   gdprConsent   Boolean   @default(false)
   consentDate   DateTime?
 
+// education level
+  educationLevel       String?
+  learningStyle        String?
+  difficultyPreference String?
+
   // Relations
   accounts     Account[]
   sessions     Session[]
@@ -73,6 +78,7 @@ model Chat {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id])
+  metadata Json?  // This will store the emotional state and analysis
 
   @@index([userId])
 }
