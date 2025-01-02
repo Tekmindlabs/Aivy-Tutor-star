@@ -7,6 +7,7 @@ import { createHybridAgent, HybridState } from '@/lib/ai/hybrid-agent'; // Added
 import { AgentState, ReActStep, EmotionalState } from '@/lib/ai/agents';
 import { Message } from '@/types/chat';
 import { MemoryService } from '@/lib/memory/memory-service';
+import { EmbeddingModel } from '@/lib/knowledge/embeddings';
 
 // Type definitions
 interface SuccessResponse {
@@ -97,6 +98,24 @@ if (!messages?.length || !messages[messages.length - 1]?.content) {
       const memoryService = new MemoryService();
       const hybridAgent = createHybridAgent(model, memoryService);
       
+      // Add tensor processing here, before creating initialState
+      let processedTensors;
+      try {
+        // This assumes inputTensors come from the request or previous processing
+        // You'll need to extract or create inputTensors based on your messages
+        const inputTensors = {
+          input_ids: messages[messages.length - 1].content, // Convert message to tensor format
+          attention_mask: null, // Add appropriate attention mask
+          token_type_ids: null // Add appropriate token type ids
+        };
+
+        processedTensors = await EmbeddingModel.processTensorInput(inputTensors);
+      } catch (tensorError) {
+        console.error("Error processing tensors:", tensorError);
+        throw new Error(`Tensor processing failed: ${tensorError.message}`);
+      }
+
+      // Update initialState to include processed tensors
       const initialState: HybridState = {
         userId: user.id,
         messages: messages,
@@ -110,9 +129,11 @@ if (!messages?.length || !messages[messages.length - 1]?.content) {
           analysis: {},
           recommendations: ""
         },
-        reactSteps: [] as ReActStep[]
+        reactSteps: [] as ReActStep[],
+        processedTensors // Add processed tensors to state
       };
     
+      // Use the processed tensors in hybrid agent
       const response = await hybridAgent.process(initialState) as AgentResponse;
 
       if (!response.success) {
@@ -191,10 +212,10 @@ if (!messages?.length || !messages[messages.length - 1]?.content) {
 
     } catch (error) {
       console.error("Error in chat processing:", error);
-      await handlers.handleLLMError(error as Error);
       return new Response(JSON.stringify({ 
-        error: "AI processing error",
-        details: error instanceof Error ? error.message : "Unknown error"
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        details: "Failed during tensor processing or agent execution"
       }), { 
         status: 500,
         headers: { 'Content-Type': 'application/json' }
@@ -204,8 +225,9 @@ if (!messages?.length || !messages[messages.length - 1]?.content) {
   } catch (error) {
     console.error("Error in request processing:", error);
     return new Response(JSON.stringify({ 
-      error: "Request processing error",
-      details: error instanceof Error ? error.message : "Unknown error"
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      details: "Failed during request processing"
     }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' }

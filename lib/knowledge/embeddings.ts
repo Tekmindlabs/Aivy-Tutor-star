@@ -1,7 +1,16 @@
 import { pipeline, Pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
 import { searchSimilarContent } from '../milvus/vectors';
 
-// Create a class to manage the model instance
+// Add utility function for tensor conversion
+function convertToTypedArray(data: any[]): Float32Array {
+  try {
+    return new Float32Array(data);
+  } catch (error) {
+    console.error('Error converting tensor data:', error);
+    throw new Error('Failed to convert tensor data to proper format');
+  }
+}
+
 class EmbeddingModel {
   private static instance: FeatureExtractionPipeline | null = null;
   private static isLoading: boolean = false;
@@ -20,10 +29,22 @@ class EmbeddingModel {
     this.loadingPromise = (async () => {
       try {
         console.log('Loading GTE-Base model...');
-        // Initialize the model with specific configuration
+        
+        // Add ONNX Runtime configuration
+        const options = {
+          executionProviders: ['cpu'],
+          graphOptimizationLevel: 'all',
+          tensorFormat: {
+            inputFormat: 'float32',
+            outputFormat: 'float32'
+          }
+        };
+
+        // Initialize the model with updated configuration
         const model = await pipeline('feature-extraction', 'Xenova/gte-base', {
           revision: 'main',
-          quantized: false, // Set to true if you want to use quantized model for better performance
+          quantized: false,
+          ...options
         }) as FeatureExtractionPipeline;
 
         if (!model) {
@@ -42,6 +63,16 @@ class EmbeddingModel {
     })();
 
     return this.loadingPromise;
+  }
+
+  // Add method to process input tensors
+  static async processTensorInput(input: any) {
+    const tensor = {
+      input_ids: convertToTypedArray(input.input_ids.cpuData),
+      attention_mask: convertToTypedArray(input.attention_mask.cpuData),
+      token_type_ids: convertToTypedArray(input.token_type_ids.cpuData)
+    };
+    return tensor;
   }
 }
 
