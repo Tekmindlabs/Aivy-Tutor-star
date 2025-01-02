@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { createEmotionalAgent } from "./emotional-agent";
 
 interface ReActStep {
   thought: string;

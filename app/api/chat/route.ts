@@ -78,21 +78,22 @@ export async function POST(req: NextRequest) {
       });
 
       // Personalization layer
-      const personalizedResponse = await model.generateContent({
-        contents: [
-          { 
-            role: "model", 
-            parts: [{ text: `
-              Adapt this response for a ${user.learningStyle || 'general'} learner 
+      const personalizedResponse = await model.generateContent([
+        {
+          role: "user",
+          parts: [{
+            text: `
+              Given this response: "${response.response}"
+              
+              Please adapt it for a ${user.learningStyle || 'general'} learner 
               with ${user.difficultyPreference || 'moderate'} difficulty preference.
               Consider their interests: ${user.interests?.join(', ') || 'general topics'}.
               Current emotional state: ${response.emotionalState.mood}, 
               Confidence: ${response.emotionalState.confidence}
-            `}]
-          },
-          { role: "user", parts: [{ text: response.response }]}
-        ]
-      });
+            `
+          }]
+        }
+      ]);
 
       const finalResponse = personalizedResponse.response.text();
 
