@@ -63,122 +63,121 @@ export async function POST(req: NextRequest) {
       experimental_streamData: true
     });
 
-    (async () => {
-      try {
-        const userContext = `User Profile:
-          - Age: ${user.age || 'Not specified'}
-          - Education Level: ${user.educationLevel || 'Not specified'}
-          - Learning Style: ${user.learningStyle || 'Not specified'}
-          - Difficulty: ${user.difficultyPreference || 'Not specified'}
-          - Interests: ${user.interests?.join(', ') || 'None specified'}`;
+    try {
+      const userContext = `User Profile:
+        - Age: ${user.age || 'Not specified'}
+        - Education Level: ${user.educationLevel || 'Not specified'}
+        - Learning Style: ${user.learningStyle || 'Not specified'}
+        - Difficulty: ${user.difficultyPreference || 'Not specified'}
+        - Interests: ${user.interests?.join(', ') || 'None specified'}`;
 
-        const initialState: AgentState = {
-          messages,
-          currentStep: "initial",
-          emotionalState: { mood: "neutral", confidence: "medium" },
-          context: {
-            role: "tutor",
-            analysis: {},
-            recommendations: ""
-          }
-        };
+      const initialState: AgentState = {
+        messages,
+        currentStep: "initial",
+        emotionalState: { mood: "neutral", confidence: "medium" },
+        context: {
+          role: "tutor",
+          analysis: {},
+          recommendations: ""
+        }
+      };
 
-        const timeoutDuration = 60000;
-        const withTimeout = <T>(promise: Promise<T>): Promise<T> => {
-          return Promise.race([
-            promise,
-            new Promise<T>((_, reject) => 
-              setTimeout(() => reject(new Error('Request timeout')), timeoutDuration)
-            )
-          ]);
-        };
+      const timeoutDuration = 60000;
+      const withTimeout = <T>(promise: Promise<T>): Promise<T> => {
+        return Promise.race([
+          promise,
+          new Promise<T>((_, reject) => 
+            setTimeout(() => reject(new Error('Request timeout')), timeoutDuration)
+          )
+        ]);
+      };
 
-        // Type-safe agent responses
-        const emotionalState = await withTimeout(createEmotionalAgent(model)(initialState)) as AgentResponse;
-        const researchState = await withTimeout(createResearcherAgent(model)(emotionalState)) as AgentResponse;
-        const validatedState = await withTimeout(createValidatorAgent(model)(researchState)) as AgentResponse;
+      // Type-safe agent responses
+      const emotionalState = await withTimeout(createEmotionalAgent(model)(initialState)) as AgentResponse;
+      const researchState = await withTimeout(createResearcherAgent(model)(emotionalState)) as AgentResponse;
+      const validatedState = await withTimeout(createValidatorAgent(model)(researchState)) as AgentResponse;
 
-        const response = await withTimeout(model.generateContent({
-          contents: [
-            { role: "system", parts: [{ text: userContext }]},
-            { role: "system", parts: [{ text: JSON.stringify(validatedState.context.analysis) }]},
-            { role: "user", parts: [{ text: messages[messages.length - 1].content }]}
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1000,
-          }
-        }));
+      const response = await withTimeout(model.generateContent({
+        contents: [
+          // Change 'system' to 'model' for context messages
+          { role: "model", parts: [{ text: userContext }]},
+          { role: "model", parts: [{ text: JSON.stringify(validatedState.context.analysis) }]},
+          { role: "user", parts: [{ text: messages[messages.length - 1].content }]}
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1000,
+        }
+      }));
 
-      } catch (error) {
-        console.error("AI model error:", error);
-        return new Response(JSON.stringify({ 
-          error: "AI processing error",
-          details: error instanceof Error ? error.message : "Unknown error"
-        }), { 
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      
-        const result = response.response;
-        const text = result.text();
+      const result = response.response;
+      const text = result.text();
 
-        // Personalization layer
-        const personalizedResponse = await model.generateContent({
-          contents: [
-            { role: "system", parts: [{ text: `
+      // Personalization layer
+      const personalizedResponse = await model.generateContent({
+        contents: [
+          // Change 'system' to 'model' for the personalization prompt
+          { 
+            role: "model", 
+            parts: [{ text: `
               Adapt this response for a ${user.learningStyle || 'general'} learner 
               with ${user.difficultyPreference || 'moderate'} difficulty preference.
               Consider their interests: ${user.interests?.join(', ') || 'general topics'}.
               Current emotional state: ${validatedState.emotionalState.mood}, 
               Confidence: ${validatedState.emotionalState.confidence}
-            `}]},
-            { role: "user", parts: [{ text }]}
-          ]
-        });
+            `}]
+          },
+          { role: "user", parts: [{ text }]}
+        ]
+      });
 
-        const finalResponse = personalizedResponse.response.text();
+      const finalResponse = personalizedResponse.response.text();
 
-        try {
-          await prisma.chat.create({
-            data: {
-              userId: user.id,
-              message: messages[messages.length - 1].content,
-              response: finalResponse,
-              metadata: {
-                emotionalState: validatedState.emotionalState,
-                analysis: validatedState.context.analysis,
-                personalization: {
-                  learningStyle: user.learningStyle,
-                  difficulty: user.difficultyPreference,
-                  interests: user.interests
-                }
+      try {
+        await prisma.chat.create({
+          data: {
+            userId: user.id,
+            message: messages[messages.length - 1].content,
+            response: finalResponse,
+            metadata: {
+              emotionalState: validatedState.emotionalState,
+              analysis: validatedState.context.analysis,
+              personalization: {
+                learningStyle: user.learningStyle,
+                difficulty: user.difficultyPreference,
+                interests: user.interests
               }
-            },
-          });
-        } catch (dbError) {
-          console.error("Error saving chat to database:", dbError);
-        }
-
-        const messageData = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: finalResponse,
-          createdAt: new Date().toISOString()
-        };
-
-        await handlers.handleLLMNewToken(finalResponse, messageData, runId);
-        await handlers.handleLLMEnd(messageData, runId);
-
-      } catch (error) {
-        console.error("Error in chat processing:", error);
-        handlers.handleLLMError(error as Error, runId);
+            }
+          },
+        });
+      } catch (dbError) {
+        console.error("Error saving chat to database:", dbError);
       }
-    })();
 
-    return new StreamingTextResponse(stream);
-    
+      const messageData = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: finalResponse,
+        createdAt: new Date().toISOString()
+      };
+
+      await handlers.handleLLMNewToken(finalResponse);
+      await handlers.handleLLMEnd(messageData);
+
+      return new StreamingTextResponse(stream);
+
+    } catch (error) {
+      console.error("Error in chat processing:", error);
+      handlers.handleLLMError(error as Error);
+      return new Response(JSON.stringify({ 
+        error: "AI processing error",
+        details: error instanceof Error ? error.message : "Unknown error"
+      }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
   } catch (error) {
     console.error("Error in chat route:", error);
     return new Response(JSON.stringify({ 
