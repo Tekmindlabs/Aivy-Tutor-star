@@ -63,12 +63,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { messages }: { messages: Message[] } = await req.json();
-    if (!messages || !Array.isArray(messages)) {
-      return new Response(
-        JSON.stringify({ error: "Invalid messages format" }), 
-        { status: 400 }
-      );
-    }
+if (!messages?.length || !messages[messages.length - 1]?.content) {
+  return new Response(
+    JSON.stringify({ error: "Invalid message format - content is required" }), 
+    { status: 400 }
+  );
+}
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },

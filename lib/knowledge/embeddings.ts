@@ -50,8 +50,11 @@ export interface EmbeddingOutput {
 }
 
 export async function getEmbedding(text: string): Promise<number[]> {
+  if (!text) {
+    throw new Error("text may not be null or undefined");
+  }
+  
   try {
-    // Get model instance
     const model = await EmbeddingModel.getInstance();
     if (!model) {
       throw new Error('Model not initialized');

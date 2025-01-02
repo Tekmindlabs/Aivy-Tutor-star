@@ -108,13 +108,15 @@ export const createHybridAgent = (model: any, memoryService: MemoryService) => {
     process: async (state: HybridState): Promise<HybridResponse> => {
       try {
         const lastMessage = state.messages[state.messages.length - 1];
-        
-        // Step 1: Search memories
-        const relevantMemories = await memoryService.searchMemories(
-          lastMessage.content,
-          state.userId,
-          5
-        );
+if (!lastMessage?.content) {
+  throw new Error("Invalid message format - content is required");
+}
+
+const relevantMemories = await memoryService.searchMemories(
+  lastMessage.content,
+  state.userId,
+  5
+);
 
         // Step 2: Emotional Analysis
         const emotionalAnalysis = await emotionalAgent({
