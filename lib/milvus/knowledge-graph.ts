@@ -48,7 +48,7 @@ export async function findRelatedContent({
     if (depth > maxDepth || visited.has(currentId)) return;
     visited.add(currentId);
 
-    const filter = `user_id == "${userId}" && (source_id == "${currentId}" || target_id == "${currentId}")`;
+    let filter = `user_id == "${userId}" && (source_id == "${currentId}" || target_id == "${currentId}")`;
     if (relationshipTypes.length > 0) {
       filter += ` && relationship_type in ${JSON.stringify(relationshipTypes)}`;
     }

@@ -18,19 +18,24 @@ const nextConfig = {
 
     // Handle ONNX runtime for different environments
     if (!isServer) {
-      // Use ONNX runtime web for client-side
+      // Client-side: Use ONNX runtime web
       config.resolve.alias = {
         ...config.resolve.alias,
         'onnxruntime-node': 'onnxruntime-web'
       };
+      
+      // Exclude onnxruntime-node from client bundle
+      config.externals = [...(config.externals || []), 'onnxruntime-node'];
     } else {
-      // Configure node-loader for server-side
+      // Server-side: Configure node-loader with only valid options
       config.module.rules.push({
         test: /\.node$/,
-        loader: 'node-loader',
-        options: {
-          name: '[name].[ext]',
-        },
+        use: {
+          loader: 'node-loader',
+          options: {
+            flags: '-r esm' // Optional: Add flags if needed
+          }
+        }
       });
     }
 
