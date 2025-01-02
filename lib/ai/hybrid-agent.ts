@@ -33,13 +33,14 @@ interface HybridState extends AgentState {
   context: {
     role: AgentRole;
     analysis: {
-      emotional?: string;
-      research?: string;
-      validation?: string;
+      emotional?: any;
+      research?: any;
+      validation?: any;
     };
-    recommendations?: string;
+    recommendations: string;
     previousMemories?: Memory[];
   };
+  processedTensors?: any; // Add this line
 }
 
 interface HybridResponse {
