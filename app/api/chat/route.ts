@@ -107,20 +107,21 @@ export async function POST(req: NextRequest) {
         });
 
         const result = await response.response;
-        const text = result.text();
+const text = result.text();
 
-        // Send response in chunks
-        const words = text.split(' ');
-        for (const word of words) {
-          const chunk = {
-            id: crypto.randomUUID(),
-            role: 'assistant' as const,
-            content: word + ' ',
-            createdAt: new Date().toISOString()
-          };
-          await handlers.handleLLMNewToken(JSON.stringify(chunk));
-          await new Promise(resolve => setTimeout(resolve, 50));
-        }
+// Send the response in larger, more meaningful chunks
+const chunks = text.match(/[^.!?]+[.!?]+/g) || [text];
+for (const chunk of chunks) {
+  const messageChunk = {
+    id: crypto.randomUUID(),
+    role: 'assistant' as const,
+    content: chunk.trim(),
+    createdAt: new Date().toISOString()
+  };
+  await handlers.handleLLMNewToken(JSON.stringify(messageChunk));
+  // Reduced delay between chunks
+  await new Promise(resolve => setTimeout(resolve, 10));
+}
 
         // Update chat record
         await prisma.chat.update({

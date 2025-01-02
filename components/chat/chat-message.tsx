@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
+import React, { useEffect, useState } from 'react';
 
 interface ChatMessageProps {
   message: Message;
@@ -18,6 +19,29 @@ interface CodeProps {
 }
 
 export function ChatMessage({ message, isLoading }: ChatMessageProps) {
+  const [formattedContent, setFormattedContent] = useState('');
+
+  useEffect(() => {
+    if (typeof message.content === 'string') {
+      try {
+        // Split content by JSON objects and process each
+        const parts = message.content.match(/\{[^}]+\}/g) || [message.content];
+        const processedContent = parts.map(part => {
+          try {
+            const parsed = JSON.parse(part);
+            return parsed.content || '';
+          } catch {
+            return part;
+          }
+        }).join('');
+        
+        setFormattedContent(processedContent);
+      } catch {
+        setFormattedContent(message.content);
+      }
+    }
+  }, [message.content]);
+
   return (
     <div
       className={cn(
@@ -57,7 +81,7 @@ export function ChatMessage({ message, isLoading }: ChatMessageProps) {
               },
             }}
           >
-            {message.content}
+            {formattedContent}
           </ReactMarkdown>
         </div>
         
