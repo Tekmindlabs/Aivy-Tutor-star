@@ -47,7 +47,7 @@ function SidebarContent({ pathname }: { pathname: string }) {
       <div className="p-4">
         <Link href="/" className="flex items-center space-x-2">
           <MessageSquare className="h-6 w-6" />
-          <span className="text-xl font-bold">EmotiTutor AI</span>
+          <span className="text-xl font-bold">Personal AI Companion</span>
         </Link>
       </div>
       <ScrollArea className="flex-1 px-3">

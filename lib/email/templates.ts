@@ -1,16 +1,16 @@
 export function createSignInEmail(url: string) {
     return {
-      subject: 'Sign in to Aivy Tutor',
+      subject: 'Sign in to AI Companion',
       html: `
         <!DOCTYPE html>
         <html>
           <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Sign in to Aivy Tutor</title>
+            <title>Sign in to AI Companion</title>
           </head>
           <body style="font-family: sans-serif; padding: 20px;">
-            <h1 style="color: #333;">Sign in to Aivy Tutor</h1>
+            <h1 style="color: #333;">Sign in to AI Companion</h1>
             <p>Click the link below to sign in to your account:</p>
             <a 
               href="${url}" 

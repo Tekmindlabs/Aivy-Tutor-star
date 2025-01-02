@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
 
-export type AgentRole = 'master' | 'emotional' | 'tutor' | 'researcher' | 'validator';
+export type AgentRole = 'master' | 'emotional' | 'companion' | 'researcher' | 'validator';
 
 export type AgentState = {
   messages: string[];
@@ -123,7 +123,7 @@ const createMasterAgent = (model: any) => async (state: AgentState) => {
   const qualityCheck = state.context.recommendations;
 
   const result = await model.generateContent(`
-    As a caring and supportive tutor, create a response that combines:
+    As a caring and supportive companion, create a response that combines:
 
     Emotional understanding: "${emotionalUnderstanding}"
     Educational content: "${educationalContent}"

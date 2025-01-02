@@ -30,7 +30,7 @@ export function GDPRConsent({ initialData, onNext }: GDPRConsentProps) {
       <form onSubmit={form.handleSubmit(onNext)} className="space-y-6">
         <div className="prose dark:prose-invert max-w-none">
           <h2>Privacy Policy & Data Processing Consent</h2>
-          <p>By using our AI Tutor service, you agree to:</p>
+          <p>By using our AI Companion service, you agree to:</p>
           <ul>
             <li>The collection and processing of your personal data</li>
             <li>The storage of your chat history for service improvement</li>

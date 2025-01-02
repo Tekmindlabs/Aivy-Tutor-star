@@ -5,9 +5,9 @@ export interface EmailTemplate {
 
 export function welcomeEmail(name: string): EmailTemplate {
   return {
-    subject: 'Welcome to EmotiTutor AI',
+    subject: 'Welcome to Personal AI Companion',
     html: `
-      <h1>Welcome to EmotiTutor AI, ${name}!</h1>
+      <h1>Welcome to Personal AI Companion, ${name}!</h1>
       <p>We're excited to have you on board. Start your learning journey today!</p>
     `
   };

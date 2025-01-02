@@ -28,7 +28,7 @@ export default function ChatPage() {
   return (
     <div className="container mx-auto max-w-4xl">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">AI Tutor Chat</h1>
+        <h1 className="text-2xl font-bold">AI Companion</h1>
         <ModelSelector value={model} onValueChange={setModel} />
       </div>
       

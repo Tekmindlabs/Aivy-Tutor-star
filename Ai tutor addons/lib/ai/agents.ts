@@ -10,8 +10,8 @@ type AgentState = {
   emotionalState: string;
 };
 
-// Create the tutor agent
-export const createTutorAgent = async () => {
+// Create the companion agent
+export const createcompanionAgent = async () => {
   const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
   const emotionalAnalysis = async (state: AgentState) => {
@@ -28,7 +28,7 @@ export const createTutorAgent = async () => {
 
   const generateResponse = async (state: AgentState) => {
     const prompt = `
-      You are an empathetic AI tutor. Based on the student's emotional state: ${state.emotionalState}
+      You are an empathetic AI companion. Based on the student's emotional state: ${state.emotionalState}
       Respond to: "${state.messages[state.messages.length - 1]}"
       Provide a supportive and educational response.
     `;

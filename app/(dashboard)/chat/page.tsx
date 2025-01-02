@@ -21,23 +21,45 @@ export default function ChatPage() {
     }
   });
 
-  // Function to get greeting based on time of day
+  // Enhanced greeting function with more personalization
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
+    let timeBasedGreeting = "";
+    
+    if (hour < 12) timeBasedGreeting = "Good morning";
+    else if (hour < 18) timeBasedGreeting = "Good afternoon";
+    else timeBasedGreeting = "Good evening";
+
+    const emojis = {
+      morning: "🌅",
+      afternoon: "☀️",
+      evening: "🌙"
+    };
+
+    const emoji = hour < 12 ? emojis.morning : hour < 18 ? emojis.afternoon : emojis.evening;
+    
+    return { timeBasedGreeting, emoji };
   };
 
-  // Generate initial greeting message
+  // Generate initial greeting message with enhanced personalization
   useEffect(() => {
     if (messages.length === 0 && session?.user?.name) {
-      const greeting = getGreeting();
+      const { timeBasedGreeting, emoji } = getGreeting();
+      const userName = session.user.name.split(' ')[0]; // Get first name
+      
+      const greetingMessages = [
+        `${timeBasedGreeting} ${userName}! ${emoji}`,
+        "I'm your personal AI Companion, ready to help you learn and grow.",
+        "What subject would you like to explore today?",
+        "Feel free to ask me anything - from basic concepts to complex problems!"
+      ];
+
       const initialMessage = {
         id: "initial-greeting",
         role: "assistant",
-        content: `${greeting} ${session.user.name}! 👋 How is your day going? I'm your AI Tutor, ready to help you learn and answer any questions you might have. What would you like to learn about today?`
+        content: greetingMessages.join(" ")
       };
+
       setMessages([initialMessage]);
     }
   }, [session, setMessages, messages.length]);
@@ -45,7 +67,7 @@ export default function ChatPage() {
   return (
     <div className="container mx-auto max-w-4xl">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold">AI Tutor Chat</h1>
+        <h1 className="text-2xl font-bold">AI Companion Chat</h1>
       </div>
       
       <Card className="flex h-[600px] flex-col">
@@ -66,7 +88,7 @@ export default function ChatPage() {
             <Input
               value={input}
               onChange={handleInputChange}
-              placeholder="Ask your tutor anything..."
+              placeholder="Ask your AI Companion anything..."
               disabled={isLoading}
               className="flex-1"
             />

@@ -3,7 +3,7 @@ import { EmailTemplate } from './templates';
 
 export async function sendEmail({
   to,
-  from = 'EmotiTutor AI <no-reply@your-domain.com>',
+  from = 'AI Companion <no-reply@your-domain.com>',
   template
 }: {
   to: string;

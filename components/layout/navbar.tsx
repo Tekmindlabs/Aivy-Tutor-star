@@ -19,7 +19,7 @@ export function Navbar() {
       <div className="container flex h-16 items-center px-4">
         <div className="mr-8">
           <Link href="/" className="text-xl font-bold">
-            EmotiTutor AI
+          AI Companion
           </Link>
         </div>
         <div className="flex gap-6">
