@@ -1,7 +1,6 @@
 "use client";
 
 import { useChat } from "ai/react";
-import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,9 +10,9 @@ import { useSession } from "next-auth/react";
 
 export default function ChatPage() {
   const { data: session } = useSession();
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     api: "/api/chat",
-    initialMessages: [], // Make sure this is empty to trigger the greeting
+    initialMessages: [], // Empty to trigger the greeting from the API
     onResponse(response) {
       const chatContainer = document.getElementById('chat-container');
       if (chatContainer) {
@@ -21,49 +20,6 @@ export default function ChatPage() {
       }
     }
   });
-
-  // Enhanced greeting function with more personalization
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    let timeBasedGreeting = "";
-    
-    if (hour < 12) timeBasedGreeting = "Good morning";
-    else if (hour < 18) timeBasedGreeting = "Good afternoon";
-    else timeBasedGreeting = "Good evening";
-
-    const emojis = {
-      morning: "🌅",
-      afternoon: "☀️",
-      evening: "🌙"
-    };
-
-    const emoji = hour < 12 ? emojis.morning : hour < 18 ? emojis.afternoon : emojis.evening;
-    
-    return { timeBasedGreeting, emoji };
-  };
-
-  // Generate initial greeting message with enhanced personalization
-  useEffect(() => {
-    if (messages.length === 0 && session?.user?.name) {
-      const { timeBasedGreeting, emoji } = getGreeting();
-      const userName = session.user.name.split(' ')[0]; // Get first name
-      
-      const greetingMessages = [
-        `${timeBasedGreeting}, ${userName}! ${emoji}`,
-        "I'm Aivy, your personal AI companion here to guide and support you.",
-        "What’s on your mind today? Let’s explore together!",
-        "Ask me anything—whether it’s learning something new or tackling a tricky question!"
-      ];
-
-      const initialMessage = {
-        id: "initial-greeting",
-        role: "assistant",
-        content: greetingMessages.join(" ")
-      };
-
-      setMessages([initialMessage]);
-    }
-  }, [session, setMessages, messages.length]);
 
   return (
     <div className="container mx-auto max-w-4xl">
