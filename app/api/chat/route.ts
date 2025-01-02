@@ -5,6 +5,7 @@ import { prisma } from "lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createHybridAgent } from '@/lib/ai/hybrid-agent';
 import { AgentState, ReActStep, EmotionalState } from '@/lib/ai/agents';
+import { Message } from '@/types/chat';
 
 if (!process.env.GOOGLE_AI_API_KEY) {
   throw new Error("GOOGLE_AI_API_KEY is not set");
@@ -16,7 +17,38 @@ export async function POST(req: NextRequest) {
   const runId = crypto.randomUUID();
   
   try {
-    // Session validation and user data retrieval code remains the same...
+    const session = await getSession();
+    if (!session?.user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }), 
+        { status: 401 }
+      );
+    }
+
+    const { messages }: { messages: Message[] } = await req.json();
+    if (!messages || !Array.isArray(messages)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid messages format" }), 
+        { status: 400 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        id: true,
+        learningStyle: true,
+        difficultyPreference: true,
+        interests: true
+      }
+    });
+
+    if (!user) {
+      return new Response(
+        JSON.stringify({ error: "User not found" }), 
+        { status: 404 }
+      );
+    }
 
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
     const { stream, handlers } = LangChainStream({
@@ -26,7 +58,6 @@ export async function POST(req: NextRequest) {
     try {
       const hybridAgent = createHybridAgent(model);
       
-      // Create initial state with required HybridState properties
       const initialState = {
         messages: messages.map(m => m.content),
         currentStep: "initial",
@@ -39,35 +70,34 @@ export async function POST(req: NextRequest) {
           analysis: {},
           recommendations: ""
         },
-        reactSteps: [] as ReActStep[] // Add this to make it compatible with HybridState
+        reactSteps: [] as ReActStep[]
       };
 
-      // Process with hybrid agent
       const response = await hybridAgent.process(initialState);
 
       if (!response.success) {
         throw new Error(response.error || "Processing failed");
       }
 
-      // Personalization layer with correct Gemini API structure
-      const personalizedResponse = await model.generateContent({
-        role: "user",
-        parts: [{
-          text: `
-            Given this response: "${response.response}"
-            
-            Please adapt it for a ${user.learningStyle || 'general'} learner 
-            with ${user.difficultyPreference || 'moderate'} difficulty preference.
-            Consider their interests: ${user.interests?.join(', ') || 'general topics'}.
-            Current emotional state: ${response.emotionalState?.mood}, 
-            Confidence: ${response.emotionalState?.confidence}
-          `
+      const prompt = {
+        contents: [{
+          parts: [{
+            text: `
+              Given this response: "${response.response}"
+              
+              Please adapt it for a ${user.learningStyle || 'general'} learner 
+              with ${user.difficultyPreference || 'moderate'} difficulty preference.
+              Consider their interests: ${user.interests?.join(', ') || 'general topics'}.
+              Current emotional state: ${response.emotionalState?.mood}, 
+              Confidence: ${response.emotionalState?.confidence}
+            `
+          }]
         }]
-      });
+      };
 
+      const personalizedResponse = await model.generateContent(prompt);
       const finalResponse = personalizedResponse.response.text();
 
-      // Save to database
       try {
         await prisma.chat.create({
           data: {
@@ -75,12 +105,12 @@ export async function POST(req: NextRequest) {
             message: messages[messages.length - 1].content,
             response: finalResponse,
             metadata: {
-              emotionalState: response.emotionalState,
-              reactSteps: response.reactSteps,
+              emotionalState: response.emotionalState || null,
+              reactSteps: response.reactSteps || [],
               personalization: {
-                learningStyle: user.learningStyle,
-                difficulty: user.difficultyPreference,
-                interests: user.interests
+                learningStyle: user.learningStyle || null,
+                difficulty: user.difficultyPreference || null,
+                interests: user.interests || []
               }
             }
           },
@@ -89,7 +119,6 @@ export async function POST(req: NextRequest) {
         console.error("Error saving chat to database:", dbError);
       }
 
-      // Handle streaming response
       const messageData = {
         id: runId,
         role: 'assistant',
@@ -97,14 +126,14 @@ export async function POST(req: NextRequest) {
         createdAt: new Date().toISOString()
       };
 
-      await handlers.handleLLMNewToken(finalResponse);
-      await handlers.handleLLMEnd(messageData);
+      await handlers.handleLLMNewToken(finalResponse, runId);
+      await handlers.handleLLMEnd(messageData, runId);
 
       return new StreamingTextResponse(stream);
 
     } catch (error) {
       console.error("Error in chat processing:", error);
-      handlers.handleLLMError(error as Error);
+      await handlers.handleLLMError(error as Error, runId);
       return new Response(JSON.stringify({ 
         error: "AI processing error",
         details: error instanceof Error ? error.message : "Unknown error"
