@@ -11,7 +11,7 @@ interface ChatCompletionMessage {
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
 
-// Helper function to generate greeting
+// Enhanced greeting function
 const getGreeting = (userName: string) => {
   const hour = new Date().getHours();
   let timeBasedGreeting = "";
@@ -22,18 +22,26 @@ const getGreeting = (userName: string) => {
 
   const emoji = hour < 12 ? "🌅" : hour < 18 ? "☀️" : "🌙";
   
-  return [
+  const greetingParts = [
     `${timeBasedGreeting}, ${userName}! ${emoji}`,
     "I'm Aivy, your personal AI companion here to guide and support you.",
     "What's on your mind today? Let's explore together!",
     "Ask me anything—whether it's learning something new or tackling a tricky question!"
-  ].join(" ");
+  ];
+
+  return {
+    role: 'assistant',
+    content: greetingParts.join(" ")
+  };
 };
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
+    console.log("Session data:", session);
+
     if (!session?.user?.email) {
+      console.error("No session or user found");
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -47,37 +55,45 @@ export async function POST(req: NextRequest) {
 
     const { messages }: { messages: ChatCompletionMessage[] } = await req.json();
     
-    // Handle initial greeting
+    // Enhanced greeting handling
     if (!messages?.length) {
-      const userName = session.user.name?.split(' ')[0] || 'there';
+      const userName = session.user.name 
+        ? session.user.name.split(' ')[0]
+        : session.user.email?.split('@')[0] 
+        ?? 'there';
+      
       const greetingMessage = getGreeting(userName);
       
-      // Store greeting in chat history
-      const chatRecord = await prisma.chat.create({
-        data: {
-          userId: user.id,
-          message: "Initial greeting",
-          response: greetingMessage,
-        },
-      });
-    
-      // Return in the expected format with a unique ID
-      return new Response(
-        JSON.stringify({
-          id: chatRecord.id, // Use the database record ID
-          role: "assistant",
-          content: greetingMessage,
-        }),
-        { 
-          status: 200,
-          headers: { 
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-store, no-cache, must-revalidate'
+      try {
+        const chatRecord = await prisma.chat.create({
+          data: {
+            userId: user.id,
+            message: "Initial greeting",
+            response: greetingMessage.content,
+          },
+        });
+
+        return new Response(
+          JSON.stringify({
+            id: chatRecord.id,
+            role: "assistant",
+            content: greetingMessage.content,
+          }),
+          { 
+            status: 200,
+            headers: { 
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store, no-cache, must-revalidate'
+            }
           }
-        }
-      );
+        );
+      } catch (error) {
+        console.error("Error storing greeting:", error);
+        return new Response("Failed to store greeting", { status: 500 });
+      }
     }
 
+    // Existing chat handling code remains the same
     const lastMessage = messages[messages.length - 1].content;
     const { stream, handlers } = LangChainStream();
 
