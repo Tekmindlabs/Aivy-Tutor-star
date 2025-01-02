@@ -13,15 +13,15 @@ export default async function Home() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center">
       <div className="text-center space-y-6">
-        <h1 className="text-4xl font-bold">Welcome to Personal AI Companion</h1>
+        <h1 className="text-4xl font-bold">Welcome to Personal AI tutor</h1>
         <p className="text-xl text-muted-foreground">
-          Your personal AI-powered learning companion
+          Your personal AI-powered learning tutor
         </p>
         
         <div className="my-8">
           <img 
             src="/hero-image.png" 
-            alt="AI Companion Hero" 
+            alt="AI tutor Hero" 
             className="max-w-2xl mx-auto"
           />
         </div>

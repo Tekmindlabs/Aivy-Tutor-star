@@ -14,13 +14,23 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
 
-// Extend the User type to include the additional properties
 interface ExtendedUser extends User {
   phoneNumber?: string;
   age?: number;
   interests?: string[];
+  educationLevel?: string;
+  preferredLanguage?: string;
+  learningStyle?: string;
+  difficultyPreference?: string;
 }
 
 interface ProfileEditFormProps {
@@ -28,11 +38,14 @@ interface ProfileEditFormProps {
   onComplete: () => void;
 }
 
-// Define a schema for the form
 const profileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   phoneNumber: z.string().optional(),
   age: z.number().min(13, "Must be at least 13 years old").optional(),
+  educationLevel: z.enum(['primary', 'secondary', 'university', 'other']).optional(),
+  preferredLanguage: z.string().optional(),
+  learningStyle: z.enum(['visual', 'auditory', 'reading', 'kinesthetic']).optional(),
+  difficultyPreference: z.enum(['beginner', 'intermediate', 'advanced']).optional(),
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -44,6 +57,10 @@ export function ProfileEditForm({ user, onComplete }: ProfileEditFormProps) {
       name: user.name || "",
       phoneNumber: user.phoneNumber || "",
       age: user.age || undefined,
+      educationLevel: user.educationLevel as any || undefined,
+      preferredLanguage: user.preferredLanguage || "",
+      learningStyle: user.learningStyle as any || undefined,
+      difficultyPreference: user.difficultyPreference as any || undefined,
     },
   });
 
@@ -51,14 +68,8 @@ export function ProfileEditForm({ user, onComplete }: ProfileEditFormProps) {
     try {
       const response = await fetch("/api/profile", {
         method: "PUT",
-        headers: { 
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: data.name,
-          phoneNumber: data.phoneNumber || null,
-          age: data.age || null,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
       });
   
       if (!response.ok) {
@@ -100,19 +111,7 @@ export function ProfileEditForm({ user, onComplete }: ProfileEditFormProps) {
             </FormItem>
           )}
         />
-        <FormField
-          control={form.control}
-          name="phoneNumber"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Phone Number</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        
         <FormField
           control={form.control}
           name="age"
@@ -134,6 +133,81 @@ export function ProfileEditForm({ user, onComplete }: ProfileEditFormProps) {
             </FormItem>
           )}
         />
+
+        <FormField
+          control={form.control}
+          name="educationLevel"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Education Level</FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                defaultValue={field.value}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select education level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="primary">Primary</SelectItem>
+                  <SelectItem value="secondary">Secondary</SelectItem>
+                  <SelectItem value="university">University</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="learningStyle"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Learning Style</FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                defaultValue={field.value}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select learning style" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="visual">Visual</SelectItem>
+                  <SelectItem value="auditory">Auditory</SelectItem>
+                  <SelectItem value="reading">Reading</SelectItem>
+                  <SelectItem value="kinesthetic">Kinesthetic</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="difficultyPreference"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Difficulty Preference</FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                defaultValue={field.value}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select difficulty" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="beginner">Beginner</SelectItem>
+                  <SelectItem value="intermediate">Intermediate</SelectItem>
+                  <SelectItem value="advanced">Advanced</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
         <Button type="submit">Save Changes</Button>
       </form>
     </Form>

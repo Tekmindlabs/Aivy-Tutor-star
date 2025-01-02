@@ -27,7 +27,7 @@ const getGreeting = (userName: string) => {
   
   const greetingParts = [
     `${timeBasedGreeting}, ${userName}! ${emoji}`,
-    "I'm Aivy, your personal AI companion here to guide and support you.",
+    "I'm Aivy, your personal AI tutor here to guide and support you.",
     "What's on your mind today? Let's explore together!",
   ];
 

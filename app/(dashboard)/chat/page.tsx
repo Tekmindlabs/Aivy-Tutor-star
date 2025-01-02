@@ -83,7 +83,7 @@ export default function ChatPage() {
     <ErrorBoundary>
       <div className="container mx-auto max-w-4xl p-4">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold">AI Companion Chat</h1>
+          <h1 className="text-2xl font-bold">AI tutor Chat</h1>
           {session?.user?.name && (
             <p className="text-gray-600">
               Welcome back, {session.user.name}

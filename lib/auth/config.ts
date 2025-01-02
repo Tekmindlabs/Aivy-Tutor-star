@@ -36,10 +36,10 @@ export const authConfig: NextAuthOptions = {
           const result = await resend.emails.send({
             from: from,
             to: email,
-            subject: "Sign in to AI Companion",
+            subject: "Sign in to AI tutor",
             html: `
               <div>
-                <h1>Sign in to AI Companion</h1>
+                <h1>Sign in to AI tutor</h1>
                 <p>Click the link below to sign in to your account:</p>
                 <a href="${url}">Sign in</a>
                 <p>If you didn't request this email, you can safely ignore it.</p>

@@ -22,7 +22,7 @@ class ResendService {
   }) {
     try {
       const { data, error } = await this.resend.emails.send({
-        from: 'AI Companion <onboarding@resend.dev>', // Update with your domain
+        from: 'AI tutor <onboarding@resend.dev>', // Update with your domain
         to,
         subject,
         html,

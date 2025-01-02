@@ -12,11 +12,15 @@ export async function PUT(req: Request) {
 
     const data = await req.json();
     
-    // Update validation to handle all fields
     const validatedData = {
       name: data.name,
       phoneNumber: data.phoneNumber || null,
       age: data.age ? parseInt(data.age) : null,
+      educationLevel: data.educationLevel || null,
+      preferredLanguage: data.preferredLanguage || null,
+      learningStyle: data.learningStyle || null,
+      difficultyPreference: data.difficultyPreference || null,
+      interests: data.interests || [],
     };
 
     const updatedUser = await prisma.user.update({
