@@ -7,7 +7,8 @@ import {
   createEmotionalAgent, 
   createResearcherAgent, 
   createValidatorAgent,
-  AgentState 
+  AgentState,
+  AgentResponse 
 } from "lib/ai/agents";
 
 if (!process.env.GOOGLE_AI_API_KEY) {
@@ -17,6 +18,8 @@ if (!process.env.GOOGLE_AI_API_KEY) {
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
 
 export async function POST(req: NextRequest) {
+  const runId = crypto.randomUUID();
+  
   try {
     const session = await getSession();
     if (!session?.user?.email) {
@@ -26,7 +29,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Update select to only include existing fields
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
       select: {
@@ -48,7 +50,6 @@ export async function POST(req: NextRequest) {
 
     const { messages } = await req.json();
 
-    // Validate messages
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(JSON.stringify({ error: "Invalid messages format" }), { 
         status: 400,
@@ -62,7 +63,6 @@ export async function POST(req: NextRequest) {
       experimental_streamData: true
     });
 
-    // Start processing in background
     (async () => {
       try {
         const userContext = `User Profile:
@@ -83,20 +83,20 @@ export async function POST(req: NextRequest) {
           }
         };
 
-        // Add timeout handling for agent calls
-        const timeoutDuration = 30000; // 30 seconds
-        const withTimeout = <T>(promise: Promise<T>) => {
+        const timeoutDuration = 60000;
+        const withTimeout = <T>(promise: Promise<T>): Promise<T> => {
           return Promise.race([
             promise,
-            new Promise((_, reject) => 
+            new Promise<T>((_, reject) => 
               setTimeout(() => reject(new Error('Request timeout')), timeoutDuration)
             )
           ]);
         };
 
-        const emotionalState = await withTimeout(createEmotionalAgent(model)(initialState));
-        const researchState = await withTimeout(createResearcherAgent(model)(emotionalState));
-        const validatedState = await withTimeout(createValidatorAgent(model)(researchState));
+        // Type-safe agent responses
+        const emotionalState = await withTimeout(createEmotionalAgent(model)(initialState)) as AgentResponse;
+        const researchState = await withTimeout(createResearcherAgent(model)(emotionalState)) as AgentResponse;
+        const validatedState = await withTimeout(createValidatorAgent(model)(researchState)) as AgentResponse;
 
         const response = await withTimeout(model.generateContent({
           contents: [
@@ -110,41 +110,59 @@ export async function POST(req: NextRequest) {
           }
         }));
 
-        const result = await response.response;
+        const result = response.response;
         const text = result.text();
 
-        // Create chat record with error handling
+        // Personalization layer
+        const personalizedResponse = await model.generateContent({
+          contents: [
+            { role: "system", parts: [{ text: `
+              Adapt this response for a ${user.learningStyle || 'general'} learner 
+              with ${user.difficultyPreference || 'moderate'} difficulty preference.
+              Consider their interests: ${user.interests?.join(', ') || 'general topics'}.
+              Current emotional state: ${validatedState.emotionalState.mood}, 
+              Confidence: ${validatedState.emotionalState.confidence}
+            `}]},
+            { role: "user", parts: [{ text }]}
+          ]
+        });
+
+        const finalResponse = personalizedResponse.response.text();
+
         try {
           await prisma.chat.create({
             data: {
               userId: user.id,
               message: messages[messages.length - 1].content,
-              response: text,
+              response: finalResponse,
               metadata: {
                 emotionalState: validatedState.emotionalState,
-                analysis: validatedState.context.analysis
+                analysis: validatedState.context.analysis,
+                personalization: {
+                  learningStyle: user.learningStyle,
+                  difficulty: user.difficultyPreference,
+                  interests: user.interests
+                }
               }
             },
           });
         } catch (dbError) {
           console.error("Error saving chat to database:", dbError);
-          // Continue with response even if DB save fails
         }
 
-        // Send response tokens
         const messageData = {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: text,
+          content: finalResponse,
           createdAt: new Date().toISOString()
         };
 
-        await handlers.handleLLMNewToken(text, messageData);
-        await handlers.handleLLMEnd(messageData);
+        await handlers.handleLLMNewToken(finalResponse, messageData, runId);
+        await handlers.handleLLMEnd(messageData, runId);
 
       } catch (error) {
         console.error("Error in chat processing:", error);
-        handlers.handleLLMError(error as Error);
+        handlers.handleLLMError(error as Error, runId);
       }
     })();
 
