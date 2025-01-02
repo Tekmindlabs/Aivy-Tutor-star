@@ -14,24 +14,46 @@ import { toast } from "@/components/ui/use-toast";
 export default function ChatPage() {
   const { data: session, status } = useSession();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const initialMessageSent = useRef(false);
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, error } = useChat({
     api: "/api/chat",
     initialMessages: [],
-    initialInput: "",
-    id: session?.user?.email || "default",
+    id: session?.user?.email || 'default',
     body: {
-      messages: []
+      userId: session?.user?.email,
     },
     onError: (error) => {
       console.error("Chat error:", error);
       toast({
+        title: "Chat Error",
+        description: error.message || "Connection interrupted. Please try again.",
+        variant: "destructive",
+      });
+    },
+    onFinish: () => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  });
+
+  // Handle form submission
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    
+    try {
+      await handleSubmit(e);
+    } catch (error) {
+      console.error("Submit error:", error);
+      toast({
         title: "Error",
-        description: error.message,
+        description: "Failed to send message. Please try again.",
         variant: "destructive",
       });
     }
-  });
+  };
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -43,32 +65,16 @@ export default function ChatPage() {
 
   // Initial greeting
   useEffect(() => {
-    if (messages.length === 0 && !isLoading && session?.user) {
+    if (!initialMessageSent.current && session?.user && !isLoading && messages.length === 0) {
+      initialMessageSent.current = true;
       handleSubmit(new Event('submit') as any);
     }
-  }, [messages.length, isLoading, handleSubmit, session]);
+  }, [session, isLoading, messages.length, handleSubmit]);
 
-  // Loading state
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen">
-        <div className="text-red-500 mb-4">Error: {error.message}</div>
-        <Button 
-          onClick={() => window.location.reload()}
-          variant="outline"
-          className="hover:bg-red-50"
-        >
-          Try Again
-        </Button>
       </div>
     );
   }
@@ -95,31 +101,23 @@ export default function ChatPage() {
                   isLoading={isLoading && index === messages.length - 1}
                 />
               ))}
-              {isLoading && messages.length === 0 && (
-                <div className="flex justify-center">
-                  <div className="animate-pulse">Thinking...</div>
-                </div>
-              )}
             </div>
           </ScrollArea>
 
           <div className="border-t p-4">
-            <form 
-              onSubmit={handleSubmit} 
-              className="flex gap-2"
-            >
+            <form onSubmit={handleFormSubmit} className="flex gap-2">
               <Input
                 value={input}
                 onChange={handleInputChange}
-                placeholder="Ask your AI Companion anything..."
+                placeholder="Type your message..."
                 disabled={isLoading}
                 className="flex-1"
                 autoComplete="off"
-                autoFocus
+                minLength={2}
               />
               <Button 
                 type="submit" 
-                disabled={isLoading || !input.trim()}
+                disabled={isLoading || !input.trim() || input.length < 2}
                 className="bg-blue-500 hover:bg-blue-600 text-white disabled:bg-blue-300"
               >
                 {isLoading ? (
@@ -144,13 +142,6 @@ export default function ChatPage() {
             >
               Clear Chat
             </Button>
-          </div>
-        )}
-
-        {/* Optional: Add a typing indicator */}
-        {isLoading && (
-          <div className="text-sm text-gray-500 mt-2 text-center">
-            AI is typing...
           </div>
         )}
       </div>
