@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "lib/auth/session";
 import { StreamingTextResponse, LangChainStream } from 'ai';
 import { prisma } from "lib/prisma";
