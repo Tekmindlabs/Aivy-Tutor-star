@@ -4,18 +4,34 @@ import { StreamingTextResponse, LangChainStream } from 'ai';
 import { prisma } from "lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Message type definition
 interface ChatCompletionMessage {
   content: string;
   role: 'user' | 'assistant' | 'system';
 }
 
-// Initialize Google AI
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
+
+// Helper function to generate greeting
+const getGreeting = (userName: string) => {
+  const hour = new Date().getHours();
+  let timeBasedGreeting = "";
+  
+  if (hour < 12) timeBasedGreeting = "Good morning";
+  else if (hour < 18) timeBasedGreeting = "Good afternoon";
+  else timeBasedGreeting = "Good evening";
+
+  const emoji = hour < 12 ? "🌅" : hour < 18 ? "☀️" : "🌙";
+  
+  return [
+    `${timeBasedGreeting}, ${userName}! ${emoji}`,
+    "I'm Aivy, your personal AI companion here to guide and support you.",
+    "What's on your mind today? Let's explore together!",
+    "Ask me anything—whether it's learning something new or tackling a tricky question!"
+  ].join(" ");
+};
 
 export async function POST(req: NextRequest) {
   try {
-    // Authentication
     const session = await getSession();
     if (!session?.user?.email) {
       return new Response("Unauthorized", { status: 401 });
@@ -29,16 +45,35 @@ export async function POST(req: NextRequest) {
       return new Response("User not found", { status: 404 });
     }
 
-    // Parse request
     const { messages }: { messages: ChatCompletionMessage[] } = await req.json();
     
+    // Handle initial greeting
     if (!messages?.length) {
-      return new Response("No messages provided", { status: 400 });
+      const userName = session.user.name?.split(' ')[0] || 'there';
+      const greetingMessage = getGreeting(userName);
+      
+      // Store greeting in chat history
+      await prisma.chat.create({
+        data: {
+          userId: user.id,
+          message: "Initial greeting",
+          response: greetingMessage,
+        },
+      });
+
+      return new Response(
+        JSON.stringify({
+          role: "assistant",
+          content: greetingMessage,
+        }),
+        { 
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     const lastMessage = messages[messages.length - 1].content;
-    
-    // Setup streaming
     const { stream, handlers } = LangChainStream();
 
     // Create chat record
@@ -74,7 +109,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Update chat record with complete response
+        // Update chat record
         await prisma.chat.update({
           where: { id: chat.id },
           data: { response: text },
