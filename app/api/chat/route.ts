@@ -3,13 +3,7 @@ import { getSession } from "lib/auth/session";
 import { StreamingTextResponse, LangChainStream } from 'ai';
 import { prisma } from "lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { 
-  createEmotionalAgent, 
-  createResearcherAgent, 
-  createValidatorAgent,
-  AgentState,
-  AgentResponse 
-} from "lib/ai/agents";
+import { createHybridAgent } from '@/lib/ai/hybrid-agent';
 
 if (!process.env.GOOGLE_AI_API_KEY) {
   throw new Error("GOOGLE_AI_API_KEY is not set");
@@ -21,6 +15,7 @@ export async function POST(req: NextRequest) {
   const runId = crypto.randomUUID();
   
   try {
+    // Session validation
     const session = await getSession();
     if (!session?.user?.email) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { 
@@ -29,6 +24,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // User data retrieval
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
       select: {
@@ -58,81 +54,49 @@ export async function POST(req: NextRequest) {
     }
 
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-    
     const { stream, handlers } = LangChainStream({
       experimental_streamData: true
     });
 
     try {
-      const userContext = `User Profile:
-        - Age: ${user.age || 'Not specified'}
-        - Education Level: ${user.educationLevel || 'Not specified'}
-        - Learning Style: ${user.learningStyle || 'Not specified'}
-        - Difficulty: ${user.difficultyPreference || 'Not specified'}
-        - Interests: ${user.interests?.join(', ') || 'None specified'}`;
-
-      const initialState: AgentState = {
+      const hybridAgent = createHybridAgent(model);
+      
+      // Process with hybrid agent
+      const response = await hybridAgent.process({
         messages,
         currentStep: "initial",
-        emotionalState: { mood: "neutral", confidence: "medium" },
+        reactSteps: [],
+        emotionalState: { 
+          mood: "neutral", 
+          confidence: "medium" 
+        },
         context: {
           role: "tutor",
           analysis: {},
           recommendations: ""
         }
-      };
-
-      const timeoutDuration = 60000;
-      const withTimeout = <T>(promise: Promise<T>): Promise<T> => {
-        return Promise.race([
-          promise,
-          new Promise<T>((_, reject) => 
-            setTimeout(() => reject(new Error('Request timeout')), timeoutDuration)
-          )
-        ]);
-      };
-
-      // Type-safe agent responses
-      const emotionalState = await withTimeout(createEmotionalAgent(model)(initialState)) as AgentResponse;
-      const researchState = await withTimeout(createResearcherAgent(model)(emotionalState)) as AgentResponse;
-      const validatedState = await withTimeout(createValidatorAgent(model)(researchState)) as AgentResponse;
-
-      const response = await withTimeout(model.generateContent({
-        contents: [
-          // Change 'system' to 'model' for context messages
-          { role: "model", parts: [{ text: userContext }]},
-          { role: "model", parts: [{ text: JSON.stringify(validatedState.context.analysis) }]},
-          { role: "user", parts: [{ text: messages[messages.length - 1].content }]}
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1000,
-        }
-      }));
-
-      const result = response.response;
-      const text = result.text();
+      });
 
       // Personalization layer
       const personalizedResponse = await model.generateContent({
         contents: [
-          // Change 'system' to 'model' for the personalization prompt
           { 
             role: "model", 
             parts: [{ text: `
               Adapt this response for a ${user.learningStyle || 'general'} learner 
               with ${user.difficultyPreference || 'moderate'} difficulty preference.
               Consider their interests: ${user.interests?.join(', ') || 'general topics'}.
-              Current emotional state: ${validatedState.emotionalState.mood}, 
-              Confidence: ${validatedState.emotionalState.confidence}
+              Current emotional state: ${response.emotionalState.mood}, 
+              Confidence: ${response.emotionalState.confidence}
             `}]
           },
-          { role: "user", parts: [{ text }]}
+          { role: "user", parts: [{ text: response.response }]}
         ]
       });
 
       const finalResponse = personalizedResponse.response.text();
 
+      // Save to database
       try {
         await prisma.chat.create({
           data: {
@@ -140,8 +104,8 @@ export async function POST(req: NextRequest) {
             message: messages[messages.length - 1].content,
             response: finalResponse,
             metadata: {
-              emotionalState: validatedState.emotionalState,
-              analysis: validatedState.context.analysis,
+              emotionalState: response.emotionalState,
+              reactSteps: response.reactSteps,
               personalization: {
                 learningStyle: user.learningStyle,
                 difficulty: user.difficultyPreference,
@@ -154,6 +118,7 @@ export async function POST(req: NextRequest) {
         console.error("Error saving chat to database:", dbError);
       }
 
+      // Handle streaming response
       const messageData = {
         id: crypto.randomUUID(),
         role: 'assistant',
