@@ -13,6 +13,7 @@ export default function ChatPage() {
   const { data: session } = useSession();
   const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages } = useChat({
     api: "/api/chat",
+    initialMessages: [], // Make sure this is empty to trigger the greeting
     onResponse(response) {
       const chatContainer = document.getElementById('chat-container');
       if (chatContainer) {
