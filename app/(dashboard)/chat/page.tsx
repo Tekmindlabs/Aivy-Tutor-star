@@ -48,10 +48,10 @@ export default function ChatPage() {
       const userName = session.user.name.split(' ')[0]; // Get first name
       
       const greetingMessages = [
-        `${timeBasedGreeting} ${userName}! ${emoji}`,
-        "I'm your personal AI Companion, ready to help you learn and grow.",
-        "What subject would you like to explore today?",
-        "Feel free to ask me anything - from basic concepts to complex problems!"
+        `${timeBasedGreeting}, ${userName}! ${emoji}`,
+        "I'm Aivy, your personal AI companion here to guide and support you.",
+        "What’s on your mind today? Let’s explore together!",
+        "Ask me anything—whether it’s learning something new or tackling a tricky question!"
       ];
 
       const initialMessage = {
