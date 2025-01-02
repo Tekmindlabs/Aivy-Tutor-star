@@ -27,13 +27,13 @@ const nextConfig = {
       // Exclude onnxruntime-node from client bundle
       config.externals = [...(config.externals || []), 'onnxruntime-node'];
     } else {
-      // Server-side: Configure node-loader with only valid options
+      // Server-side: Configure node-loader with correct integer flags
       config.module.rules.push({
         test: /\.node$/,
         use: {
           loader: 'node-loader',
           options: {
-            flags: '-r esm' // Optional: Add flags if needed
+            flags: 0 // Changed from '-r esm' to 0
           }
         }
       });
