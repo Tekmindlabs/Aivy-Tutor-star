@@ -51,21 +51,34 @@ export function ProfileEditForm({ user, onComplete }: ProfileEditFormProps) {
     try {
       const response = await fetch("/api/profile", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        headers: { 
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: data.name,
+          phoneNumber: data.phoneNumber || null,
+          age: data.age || null,
+        }),
       });
-
-      if (!response.ok) throw new Error("Failed to update profile");
-
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update profile");
+      }
+  
+      const updatedUser = await response.json();
+      
       toast({
-        title: "Profile updated",
+        title: "Success",
         description: "Your profile has been successfully updated.",
       });
+      
       onComplete();
     } catch (error) {
+      console.error("Profile update error:", error);
       toast({
         title: "Error",
-        description: "Failed to update profile. Please try again.",
+        description: error.message || "Failed to update profile. Please try again.",
         variant: "destructive",
       });
     }

@@ -1,24 +1,46 @@
 "use client";
 
 import { useChat } from "ai/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatMessage } from "@/components/chat/chat-message";
+import { useSession } from "next-auth/react";
 
 export default function ChatPage() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const { data: session } = useSession();
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages } = useChat({
     api: "/api/chat",
     onResponse(response) {
-      // Scroll to bottom when new message starts
       const chatContainer = document.getElementById('chat-container');
       if (chatContainer) {
         chatContainer.scrollTop = chatContainer.scrollHeight;
       }
     }
   });
+
+  // Function to get greeting based on time of day
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
+
+  // Generate initial greeting message
+  useEffect(() => {
+    if (messages.length === 0 && session?.user?.name) {
+      const greeting = getGreeting();
+      const initialMessage = {
+        id: "initial-greeting",
+        role: "assistant",
+        content: `${greeting} ${session.user.name}! 👋 How is your day going? I'm your AI Tutor, ready to help you learn and answer any questions you might have. What would you like to learn about today?`
+      };
+      setMessages([initialMessage]);
+    }
+  }, [session, setMessages, messages.length]);
 
   return (
     <div className="container mx-auto max-w-4xl">
@@ -49,14 +71,7 @@ export default function ChatPage() {
               className="flex-1"
             />
             <Button type="submit" disabled={isLoading}>
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  <span>Thinking...</span>
-                </div>
-              ) : (
-                "Send"
-              )}
+              Send
             </Button>
           </form>
         </div>

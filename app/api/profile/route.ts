@@ -11,17 +11,27 @@ export async function PUT(req: Request) {
     }
 
     const data = await req.json();
-    const validatedData = userDetailsSchema
-      .pick({ name: true, phoneNumber: true, age: true })
-      .parse(data);
+    
+    // Update validation to handle all fields
+    const validatedData = {
+      name: data.name,
+      phoneNumber: data.phoneNumber || null,
+      age: data.age ? parseInt(data.age) : null,
+    };
 
     const updatedUser = await prisma.user.update({
       where: { email: session.user.email },
       data: validatedData,
     });
 
-    return new Response(JSON.stringify(updatedUser));
+    return new Response(JSON.stringify(updatedUser), {
+      headers: { 'Content-Type': 'application/json' },
+    });
   } catch (error) {
-    return new Response("Error updating profile", { status: 500 });
+    console.error("Profile update error:", error);
+    return new Response(JSON.stringify({ error: "Error updating profile" }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
