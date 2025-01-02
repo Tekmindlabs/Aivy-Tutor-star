@@ -18,8 +18,8 @@ const MAX_RETRIES = 3;
 interface ValidatedMessage extends Message {
   content: string;
   role: 'user' | 'assistant';
-  id?: string;
-  createdAt?: string;
+  id: string; // Remove optional modifier to match Message interface
+  createdAt: Date; // Change type to Date to match Message interface
 }
 
 export default function ChatPage() {
@@ -54,7 +54,7 @@ export default function ChatPage() {
       role: 'assistant',
       content: 'Hello! How can I help you today?',
       id: crypto.randomUUID(),
-      createdAt: new Date().toISOString()
+      createdAt: new Date() // Change from toISOString() to Date object
     }],
     id: session?.user?.email || 'default',
     body: {
@@ -97,7 +97,7 @@ export default function ChatPage() {
       role: 'user',
       content: input.trim(),
       id: crypto.randomUUID(),
-      createdAt: new Date().toISOString()
+      createdAt: new Date() // Create a Date object instead of string
     };
 
     if (!validateMessage(newMessage)) {

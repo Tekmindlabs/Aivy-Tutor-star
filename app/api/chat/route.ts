@@ -3,7 +3,7 @@ import { getSession } from "lib/auth/session";
 import { StreamingTextResponse, LangChainStream } from 'ai';
 import { prisma } from "lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { createHybridAgent } from '@/lib/ai/hybrid-agent';
+import { createHybridAgent, HybridState } from '@/lib/ai/hybrid-agent'; // Added HybridState import
 import { AgentState, ReActStep, EmotionalState } from '@/lib/ai/agents';
 import { Message } from '@/types/chat';
 import { MemoryService } from '@/lib/memory/memory-service';
@@ -30,6 +30,7 @@ interface ErrorResponse {
 type AgentResponse = SuccessResponse | ErrorResponse;
 
 interface ChatMetadata {
+  [key: string]: any; // Add index signature
   emotionalState: EmotionalState | null;
   reactSteps: Array<{
     thought: string;
@@ -93,15 +94,12 @@ if (!messages?.length || !messages[messages.length - 1]?.content) {
     });
     
     try {
-      // Initialize memory service
       const memoryService = new MemoryService();
-      
-      // Create hybrid agent with memory service
       const hybridAgent = createHybridAgent(model, memoryService);
       
-      const initialState = {
+      const initialState: HybridState = {
         userId: user.id,
-        messages: messages.map(m => m.content),
+        messages: messages,
         currentStep: "initial",
         emotionalState: { 
           mood: "neutral", 
