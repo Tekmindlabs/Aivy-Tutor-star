@@ -50,13 +50,17 @@ export async function POST(req: NextRequest) {
         { status: 404 }
       );
     }
-
+    
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
     const { stream, handlers } = LangChainStream({
       experimental_streamData: true
     });
-
+    
     try {
+      // Initialize memory service
+      const memoryService = new MemoryService();
+      
+      // Create hybrid agent with memory service
       const hybridAgent = createHybridAgent(model, memoryService);
       
       const initialState = {
@@ -73,7 +77,7 @@ export async function POST(req: NextRequest) {
         },
         reactSteps: [] as ReActStep[]
       };
-
+    
       const response = await hybridAgent.process(initialState);
 
       if (!response.success) {
