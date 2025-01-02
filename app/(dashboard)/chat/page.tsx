@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useChat } from "ai/react";
 import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/card";
@@ -11,12 +11,24 @@ import { ChatMessage } from "@/components/chat/chat-message";
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { toast } from "@/components/ui/use-toast";
 
+const RETRY_DELAY = 1000;
+const MAX_RETRIES = 3;
+
 export default function ChatPage() {
   const { data: session, status } = useSession();
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialMessageSent = useRef(false);
+  const [retryCount, setRetryCount] = useState(0);
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, error } = useChat({
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit: originalHandleSubmit,
+    isLoading,
+    error,
+    reload
+  } = useChat({
     api: "/api/chat",
     initialMessages: [],
     id: session?.user?.email || 'default',
@@ -25,10 +37,20 @@ export default function ChatPage() {
     },
     onError: (error) => {
       console.error("Chat error:", error);
+      
+      // Show different messages based on error type
+      let errorMessage = "Connection interrupted. Please try again.";
+      if (error.message.includes("timeout")) {
+        errorMessage = "Request timed out. Please try again.";
+      } else if (error.message.includes("unauthorized")) {
+        errorMessage = "Session expired. Please log in again.";
+      }
+
       toast({
         title: "Chat Error",
-        description: error.message || "Connection interrupted. Please try again.",
+        description: errorMessage,
         variant: "destructive",
+        duration: 5000,
       });
     },
     onFinish: () => {
@@ -38,24 +60,43 @@ export default function ChatPage() {
     }
   });
 
-  // Handle form submission
-  const handleFormSubmit = async (e: React.FormEvent) => {
+  // Enhanced submit handler with retry logic
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
-    
-    try {
-      await handleSubmit(e);
-    } catch (error) {
-      console.error("Submit error:", error);
-      toast({
-        title: "Error",
-        description: "Failed to send message. Please try again.",
-        variant: "destructive",
-      });
-    }
+    if (!input.trim() || input.length < 2) return;
+
+    setRetryCount(0);
+    const trySubmit = async (attempt: number): Promise<void> => {
+      try {
+        await originalHandleSubmit(e);
+      } catch (error) {
+        console.error(`Submit error (attempt ${attempt}):`, error);
+        
+        if (attempt < MAX_RETRIES) {
+          toast({
+            title: "Retrying...",
+            description: `Attempt ${attempt + 1} of ${MAX_RETRIES}`,
+            duration: 2000,
+          });
+          
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+          setRetryCount(attempt + 1);
+          return trySubmit(attempt + 1);
+        }
+        
+        toast({
+          title: "Error",
+          description: "Failed to send message after multiple attempts. Please try again later.",
+          variant: "destructive",
+          duration: 5000,
+        });
+      }
+    };
+
+    await trySubmit(0);
   };
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll and initial message handling
   useEffect(() => {
     const scrollContainer = document.getElementById('chat-container');
     if (scrollContainer) {
@@ -63,13 +104,12 @@ export default function ChatPage() {
     }
   }, [messages]);
 
-  // Initial greeting
   useEffect(() => {
     if (!initialMessageSent.current && session?.user && !isLoading && messages.length === 0) {
       initialMessageSent.current = true;
       handleSubmit(new Event('submit') as any);
     }
-  }, [session, isLoading, messages.length, handleSubmit]);
+  }, [session, isLoading, messages.length]);
 
   if (status === "loading") {
     return (
@@ -82,15 +122,6 @@ export default function ChatPage() {
   return (
     <ErrorBoundary>
       <div className="container mx-auto max-w-4xl p-4">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold">AI tutor Chat</h1>
-          {session?.user?.name && (
-            <p className="text-gray-600">
-              Welcome back, {session.user.name}
-            </p>
-          )}
-        </div>
-        
         <Card className="flex h-[600px] flex-col">
           <ScrollArea className="flex-1 p-4" id="chat-container">
             <div className="space-y-4" ref={scrollRef}>
@@ -101,11 +132,16 @@ export default function ChatPage() {
                   isLoading={isLoading && index === messages.length - 1}
                 />
               ))}
+              {retryCount > 0 && (
+                <div className="text-sm text-gray-500 text-center">
+                  Retrying... Attempt {retryCount} of {MAX_RETRIES}
+                </div>
+              )}
             </div>
           </ScrollArea>
 
           <div className="border-t p-4">
-            <form onSubmit={handleFormSubmit} className="flex gap-2">
+            <form onSubmit={handleSubmit} className="flex gap-2">
               <Input
                 value={input}
                 onChange={handleInputChange}
@@ -133,14 +169,16 @@ export default function ChatPage() {
           </div>
         </Card>
 
-        {messages.length > 0 && (
-          <div className="mt-4 flex justify-end">
+        {error && (
+          <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-md">
+            <p className="font-semibold">Error occurred:</p>
+            <p>{error.message}</p>
             <Button
+              onClick={() => reload()}
+              className="mt-2 text-sm"
               variant="outline"
-              onClick={() => window.location.reload()}
-              className="text-sm hover:bg-gray-100"
             >
-              Clear Chat
+              Try Again
             </Button>
           </div>
         )}

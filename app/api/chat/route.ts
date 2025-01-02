@@ -4,156 +4,120 @@ import { StreamingTextResponse, LangChainStream } from 'ai';
 import { prisma } from "lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// Validate environment variables
 if (!process.env.GOOGLE_AI_API_KEY) {
   throw new Error("GOOGLE_AI_API_KEY is not set");
 }
 
-interface ChatCompletionMessage {
-  content: string;
-  role: 'user' | 'assistant' | 'system';
-}
-
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-
-const getPersonalizedContext = (user: any) => {
-  const ageGroup = user.age < 15 ? 'child' : user.age < 18 ? 'teen' : 'adult';
-  const difficulty = user.difficultyPreference || 'intermediate';
-  const style = user.learningStyle || 'visual';
-  
-  return `
-    You are talking to a ${ageGroup} aged ${user.age}. 
-    Their learning style is ${style} and preferred difficulty is ${difficulty}.
-    Their interests include: ${user.interests?.join(', ')}.
-    Please adjust your language, examples, and explanations accordingly.
-    For ${ageGroup}s, use ${difficulty}-level vocabulary and ${style}-focused explanations.
-  `;
-};
-
-const getGreeting = (userName: string) => {
-  const hour = new Date().getHours();
-  let timeBasedGreeting = "";
-  
-  if (hour < 12) timeBasedGreeting = "Good morning";
-  else if (hour < 18) timeBasedGreeting = "Good afternoon";
-  else timeBasedGreeting = "Good evening";
-
-  const emoji = hour < 12 ? "🌅" : hour < 18 ? "☀️" : "🌙";
-  
-  const greetingParts = [
-    `${timeBasedGreeting}, ${userName}! ${emoji}`,
-    "I'm Aivy, your personal AI companion here to guide and support you.",
-    "What's on your mind today? Let's explore together!",
-  ];
-
-  return {
-    role: 'assistant',
-    content: greetingParts.join(" ")
-  };
-};
 
 export async function POST(req: NextRequest) {
   try {
+    // 1. Session Validation with detailed error messages
     const session = await getSession();
-    if (!session?.user?.email) {
-      return new Response("Unauthorized", { status: 401 });
+    if (!session) {
+      return new Response(JSON.stringify({ error: "No session found" }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
+    if (!session.user?.email) {
+      return new Response(JSON.stringify({ error: "No user email found in session" }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 2. User Validation
     const user = await prisma.user.findUnique({
       where: { email: session.user.email }
+    }).catch(error => {
+      console.error("Database error:", error);
+      throw new Error("Database connection failed");
     });
 
     if (!user?.id) {
-      return new Response("User not found", { status: 404 });
-    }
-
-    const { messages }: { messages: ChatCompletionMessage[] } = await req.json();
-
-    // Handle initial greeting
-    if (!messages?.length) {
-      const userName = session.user.name?.split(' ')[0] || 'there';
-      const greeting = getGreeting(userName);
-      
-      const chatRecord = await prisma.chat.create({
-        data: {
-          userId: user.id,
-          message: "Initial greeting",
-          response: greeting.content,
-        },
+      return new Response(JSON.stringify({ error: "User not found in database" }), { 
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
       });
-
-      return new Response(
-        JSON.stringify({
-          id: chatRecord.id,
-          role: "assistant",
-          content: greeting.content,
-        }),
-        { headers: { 'Content-Type': 'application/json' } }
-      );
     }
 
-    const lastMessage = messages[messages.length - 1].content;
-    if (!lastMessage?.trim() || lastMessage.length < 2) {
-      return new Response("Invalid message", { status: 400 });
+    // 3. Request Body Validation
+    let messages;
+    try {
+      const body = await req.json();
+      messages = body.messages;
+    } catch (error) {
+      return new Response(JSON.stringify({ error: "Invalid request body" }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    const { stream, handlers } = LangChainStream();
-    const personalizedContext = getPersonalizedContext(user);
+    // 4. Message Processing with Timeout
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Request timeout")), 30000)
+    );
 
-    const chat = await prisma.chat.create({
-      data: {
-        userId: user.id,
-        message: lastMessage,
-        response: "",
-      },
-    });
+    const processMessagePromise = async () => {
+      const { stream, handlers } = LangChainStream();
 
-    (async () => {
-      try {
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-        const response = await model.generateContent({
-          contents: [
-            { role: "system", parts: [{ text: personalizedContext }]},
-            { role: "user", parts: [{ text: lastMessage }]}
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1000,
-          }
-        });
+      // Start processing in background
+      (async () => {
+        try {
+          const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+          const response = await model.generateContent({
+            contents: [{ role: "user", parts: [{ text: messages[messages.length - 1].content }]}],
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 1000,
+            }
+          });
 
-        const result = await response.response;
-        const text = result.text();
+          const result = await response.response;
+          const text = result.text();
 
-        const chunks = text.match(/[^.!?]+[.!?]+/g) || [text];
-        for (const chunk of chunks) {
-          const messageChunk = {
+          // Store chat in database
+          await prisma.chat.create({
+            data: {
+              userId: user.id,
+              message: messages[messages.length - 1].content,
+              response: text,
+            },
+          });
+
+          // Stream response
+          await handlers.handleLLMNewToken(JSON.stringify({
             id: crypto.randomUUID(),
-            role: 'assistant' as const,
-            content: chunk.trim(),
+            role: 'assistant',
+            content: text,
             createdAt: new Date().toISOString()
-          };
-          await handlers.handleLLMNewToken(JSON.stringify(messageChunk));
-          await new Promise(resolve => setTimeout(resolve, 10));
+          }));
+
+          await handlers.handleLLMEnd();
+        } catch (error) {
+          console.error("Generation error:", error);
+          await handlers.handleLLMError(error as Error);
         }
+      })();
 
-        await prisma.chat.update({
-          where: { id: chat.id },
-          data: { response: text },
-        });
+      return new StreamingTextResponse(stream);
+    };
 
-        await handlers.handleLLMEnd();
-      } catch (error) {
-        console.error("Generation error:", error);
-        await handlers.handleLLMError(error as Error);
-      }
-    })();
+    // Race between timeout and processing
+    return await Promise.race([
+      processMessagePromise(),
+      timeoutPromise
+    ]);
 
-    return new StreamingTextResponse(stream);
   } catch (error) {
     console.error("API error:", error);
     return new Response(
       JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Internal server error" 
+        error: error instanceof Error ? error.message : "Internal server error",
+        details: process.env.NODE_ENV === 'development' ? error : undefined
       }), 
       { 
         status: 500,
