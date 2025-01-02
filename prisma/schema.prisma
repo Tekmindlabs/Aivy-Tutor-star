@@ -21,6 +21,7 @@ model User {
   interests     String[]
   gdprConsent   Boolean   @default(false)
   consentDate   DateTime?
+  preferredLanguage  String? 
 
 // education level
   educationLevel       String?

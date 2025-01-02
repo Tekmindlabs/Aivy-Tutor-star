@@ -7,22 +7,58 @@ export async function POST(req: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
+      return new NextResponse(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
     const body = await req.json();
-    const validatedData = userDetailsSchema.parse(body);
-
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: {
-        ...validatedData,
+    
+    try {
+      const validatedData = userDetailsSchema.parse(body);
+      
+      // Only include fields that exist in the Prisma schema
+      const updateData = {
+        name: validatedData.name,
+        phoneNumber: validatedData.phoneNumber,
+        age: validatedData.age,
+        interests: validatedData.interests,
+        educationLevel: validatedData.educationLevel,
+        preferredLanguage: validatedData.preferredLanguage,
+        learningStyle: validatedData.learningStyle,
+        difficultyPreference: validatedData.difficultyPreference,
+        gdprConsent: validatedData.gdprConsent,
         onboarded: true,
-      },
-    });
+      };
 
-    return new NextResponse("OK", { status: 200 });
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: updateData,
+      });
+
+      return new NextResponse(
+        JSON.stringify({ message: "Onboarding completed successfully" }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    } catch (validationError: any) {
+      console.error("Validation error:", validationError);
+      return new NextResponse(
+        JSON.stringify({ 
+          error: "Validation Error", 
+          details: validationError.errors 
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
   } catch (error) {
-    return new NextResponse("Internal Server Error", { status: 500 });
+    console.error("Onboarding error:", error);
+    return new NextResponse(
+      JSON.stringify({ 
+        error: "Internal Server Error",
+        details: error instanceof Error ? error.message : "Unknown error"
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 }

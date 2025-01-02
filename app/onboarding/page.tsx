@@ -15,6 +15,10 @@ export default function Onboarding() {
     age: 0,
     interests: [] as string[],
     gdprConsent: false,
+    educationLevel: "other", // Add required fields
+    preferredLanguage: "",
+    learningStyle: "visual",
+    difficultyPreference: "beginner"
   });
   const router = useRouter();
 
@@ -35,11 +39,18 @@ export default function Onboarding() {
         body: JSON.stringify(formData),
       });
       
-      if (response.ok) {
-        router.push("/chat");
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error("Onboarding failed:", data.error);
+        // Handle error (show toast/notification)
+        return;
       }
+  
+      router.push("/chat");
     } catch (error) {
       console.error("Onboarding error:", error);
+      // Handle error (show toast/notification)
     }
   };
 

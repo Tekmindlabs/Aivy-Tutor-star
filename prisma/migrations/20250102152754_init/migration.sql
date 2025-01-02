@@ -5,12 +5,16 @@ CREATE TABLE "User" (
     "email" TEXT,
     "emailVerified" TIMESTAMP(3),
     "image" TEXT,
+    "onboarded" BOOLEAN NOT NULL DEFAULT false,
     "phoneNumber" TEXT,
     "age" INTEGER,
     "interests" TEXT[],
     "gdprConsent" BOOLEAN NOT NULL DEFAULT false,
     "consentDate" TIMESTAMP(3),
-    "onboarded" BOOLEAN NOT NULL DEFAULT false,
+    "preferredLanguage" TEXT,
+    "educationLevel" TEXT,
+    "learningStyle" TEXT,
+    "difficultyPreference" TEXT,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -58,6 +62,7 @@ CREATE TABLE "Chat" (
     "response" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "metadata" JSONB,
 
     CONSTRAINT "Chat_pkey" PRIMARY KEY ("id")
 );

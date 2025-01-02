@@ -4,7 +4,7 @@ const nextConfig = {
   },
   images: { unoptimized: true },
   webpack: (config, { isServer }) => {
-    // Existing fallback configuration
+    // Fallback configuration
     config.resolve.fallback = {
       ...config.resolve.fallback,
       crypto: require.resolve('crypto-browserify'),
@@ -16,31 +16,29 @@ const nextConfig = {
       path: false
     };
 
-    // ONNX Runtime Configuration
+    // Combined alias configuration (from both webpack and former babel config)
     if (!isServer) {
-      // Client-side: Use ONNX runtime web
       config.resolve.alias = {
         ...config.resolve.alias,
         'onnxruntime-node': 'onnxruntime-web'
       };
     } else {
-      // Server-side: Use ONNX runtime node
+      // Server-side configuration
       config.externals = [
         ...(config.externals || []),
         { 'onnxruntime-node': 'onnxruntime-node' }
       ];
       
-      // Add proper node-loader configuration with unique names
       config.module.rules.push({
         test: /\.node$/,
         loader: 'node-loader',
         options: {
-          name: '[name].[hash].[ext]', // Add hash to ensure unique filenames
+          name: '[name].[hash].[ext]',
         }
       });
     }
 
-    // Prevent multiple compilations of the same asset
+    // Prevent multiple compilations
     config.output = {
       ...config.output,
       uniqueName: isServer ? 'server' : 'client',
@@ -48,7 +46,7 @@ const nextConfig = {
 
     return config;
   },
-  // Add experimental features to handle native dependencies
+  // Experimental features
   experimental: {
     serverComponentsExternalPackages: ['onnxruntime-node']
   }
