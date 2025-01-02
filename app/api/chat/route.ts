@@ -8,6 +8,42 @@ import { AgentState, ReActStep, EmotionalState } from '@/lib/ai/agents';
 import { Message } from '@/types/chat';
 import { MemoryService } from '@/lib/memory/memory-service';
 
+// Type definitions
+interface SuccessResponse {
+  success: true;
+  emotionalState: EmotionalState;
+  reactSteps: ReActStep[];
+  response: string;
+  timestamp: string;
+  currentStep: string;
+  userId: string;
+}
+
+interface ErrorResponse {
+  success: false;
+  error: string;
+  reactSteps: ReActStep[];
+  currentStep: string;
+  userId: string;
+}
+
+type AgentResponse = SuccessResponse | ErrorResponse;
+
+interface ChatMetadata {
+  emotionalState: EmotionalState | null;
+  reactSteps: Array<{
+    thought: string;
+    action: string;
+    observation: string;
+    response?: string;
+  }>;
+  personalization: {
+    learningStyle: string | null;
+    difficulty: string | null;
+    interests: string[];
+  };
+}
+
 if (!process.env.GOOGLE_AI_API_KEY) {
   throw new Error("GOOGLE_AI_API_KEY is not set");
 }
@@ -64,6 +100,7 @@ export async function POST(req: NextRequest) {
       const hybridAgent = createHybridAgent(model, memoryService);
       
       const initialState = {
+        userId: user.id,
         messages: messages.map(m => m.content),
         currentStep: "initial",
         emotionalState: { 
@@ -78,14 +115,27 @@ export async function POST(req: NextRequest) {
         reactSteps: [] as ReActStep[]
       };
     
-      const response = await hybridAgent.process(initialState);
+      const response = await hybridAgent.process(initialState) as AgentResponse;
 
       if (!response.success) {
         throw new Error(response.error || "Processing failed");
       }
 
+      // Store interaction in memory
+      await memoryService.addMemory(
+        messages,
+        user.id,
+        {
+          emotionalState: response.emotionalState,
+          learningStyle: user.learningStyle,
+          difficultyPreference: user.difficultyPreference,
+          interests: user.interests
+        }
+      );
+
       const prompt = {
         contents: [{
+          role: 'user',
           parts: [{
             text: `
               Given this response: "${response.response}"
@@ -111,13 +161,18 @@ export async function POST(req: NextRequest) {
             response: finalResponse,
             metadata: {
               emotionalState: response.emotionalState || null,
-              reactSteps: response.reactSteps || [],
+              reactSteps: response.reactSteps?.map(step => ({
+                thought: step.thought,
+                action: step.action,
+                observation: step.observation,
+                response: step.response
+              })) || [],
               personalization: {
                 learningStyle: user.learningStyle || null,
                 difficulty: user.difficultyPreference || null,
                 interests: user.interests || []
               }
-            }
+            } as ChatMetadata,
           },
         });
       } catch (dbError) {
@@ -126,19 +181,19 @@ export async function POST(req: NextRequest) {
 
       const messageData = {
         id: runId,
-        role: 'assistant',
+        role: 'assistant' as const,
         content: finalResponse,
         createdAt: new Date().toISOString()
       };
 
-      await handlers.handleLLMNewToken(finalResponse, runId);
-      await handlers.handleLLMEnd(messageData, runId);
+      await handlers.handleLLMNewToken(finalResponse);
+      await handlers.handleLLMEnd(messageData);
 
       return new StreamingTextResponse(stream);
 
     } catch (error) {
       console.error("Error in chat processing:", error);
-      await handlers.handleLLMError(error as Error, runId);
+      await handlers.handleLLMError(error as Error);
       return new Response(JSON.stringify({ 
         error: "AI processing error",
         details: error instanceof Error ? error.message : "Unknown error"

@@ -1,7 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createEmotionalAgent } from "./emotional-agent";
 import { MemoryService } from "../memory/memory-service";
+import { Message } from "@/types/chat";
+import { AgentState, EmotionalState, AgentRole } from "./agents";
 
+// Define base interfaces
 interface ReActStep {
   thought: string;
   action: string;
@@ -9,51 +12,55 @@ interface ReActStep {
   response?: string;
 }
 
-interface HybridState extends AgentState {
-  reactSteps: ReActStep[];
-  currentStep: string;
-  userId: string; // Added for memory management
-}
-
 interface Memory {
   id: string;
   content: string;
-  emotionalState: any;
+  emotionalState: EmotionalState;
   timestamp: string;
+  userId: string;
+  metadata?: {
+    learningStyle?: string;
+    difficulty?: string;
+    interests?: string[];
+  };
+}
+
+interface HybridState extends AgentState {
+  reactSteps: ReActStep[];
+  currentStep: string;
+  userId: string;
+  messages: Message[];
+  context: {
+    role: AgentRole;
+    analysis: {
+      emotional?: string;
+      research?: string;
+      validation?: string;
+    };
+    recommendations?: string;
+    previousMemories?: Memory[];
+  };
+}
+
+interface HybridResponse {
+  success: boolean;
+  emotionalState?: EmotionalState;
+  reactSteps?: ReActStep[];
+  response?: string;
+  error?: string;
+  timestamp: string;
+  currentStep: string;
   userId: string;
 }
 
-// In-memory storage
-class MemorySystem {
-  private memories: Memory[] = [];
-
-  async addMemory(userId: string, content: string, emotionalState: any): Promise<void> {
-    this.memories.push({
-      id: crypto.randomUUID(),
-      content,
-      emotionalState,
-      timestamp: new Date().toISOString(),
-      userId
-    });
-  }
-
-  async getRelevantMemories(userId: string, currentContent: string): Promise<Memory[]> {
-    return this.memories
-      .filter(memory => memory.userId === userId)
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 5); // Get 5 most recent memories
-  }
-}
-
-export const createHybridAgent = (model: any) => {
+export const createHybridAgent = (model: any, memoryService: MemoryService) => {
   const emotionalAgent = createEmotionalAgent(model);
-  const memorySystem = new MemorySystem();
   
   const executeReActStep = async (
     step: string, 
-    context: any,
-    emotionalState: any,
-    memories: Memory[]
+    state: HybridState,
+    emotionalState: EmotionalState,
+    memories: any[]
   ): Promise<ReActStep> => {
     const prompt = `
       As an emotionally intelligent AI tutor:
@@ -61,10 +68,10 @@ export const createHybridAgent = (model: any) => {
       Current Context:
       - Emotional State: ${emotionalState.mood}
       - Confidence Level: ${emotionalState.confidence}
-      - Previous Steps: ${context.reactSteps?.length || 0}
+      - Previous Steps: ${state.reactSteps?.length || 0}
       
       Previous Interactions:
-      ${memories.map(m => `- ${m.content} (Emotional State: ${m.emotionalState.mood})`).join('\n')}
+      ${memories.map(m => `- ${m.content || m.text} (Emotional State: ${m.emotionalState?.mood || 'Unknown'})`).join('\n')}
       
       Thought Process:
       1. Consider emotional state and learning needs
@@ -80,26 +87,33 @@ export const createHybridAgent = (model: any) => {
       3. What you observe from the results
     `;
 
-    const result = await model.generateContent(prompt);
-    const response = result.response.text();
+    const result = await model.generateContent({
+      contents: [{
+        role: "user",
+        parts: [{ text: prompt }]
+      }]
+    });
     
-    // Parse response into ReAct format
+    const response = result.response.text();
     const [thought, action, observation] = response.split('\n\n');
     
     return {
-      thought: thought.replace('Thought: ', ''),
-      action: action.replace('Action: ', ''),
-      observation: observation.replace('Observation: ', '')
+      thought: thought.replace('Thought: ', '').trim(),
+      action: action.replace('Action: ', '').trim(),
+      observation: observation.replace('Observation: ', '').trim()
     };
   };
 
   return {
-    process: async (state: HybridState) => {
+    process: async (state: HybridState): Promise<HybridResponse> => {
       try {
-        // Step 1: Retrieve relevant memories
-        const relevantMemories = await memorySystem.getRelevantMemories(
+        const lastMessage = state.messages[state.messages.length - 1];
+        
+        // Step 1: Search memories
+        const relevantMemories = await memoryService.searchMemories(
+          lastMessage.content,
           state.userId,
-          state.messages[state.messages.length - 1]
+          5
         );
 
         // Step 2: Emotional Analysis
@@ -120,45 +134,68 @@ export const createHybridAgent = (model: any) => {
         );
         
         // Step 4: Generate Response
+        const responsePrompt = `
+          Context:
+          - Emotional Analysis: ${JSON.stringify(emotionalAnalysis)}
+          - Reasoning Steps: ${JSON.stringify(reactStep)}
+          - Previous Interactions: ${JSON.stringify(relevantMemories)}
+          
+          User Message: ${lastMessage.content}
+          
+          Generate a supportive and personalized response that:
+          1. Acknowledges the user's emotional state
+          2. Addresses their specific needs
+          3. Provides clear and actionable guidance
+        `;
+
         const response = await model.generateContent({
-          contents: [
-            { 
-              role: "model", 
-              parts: [{ text: `
-                Using the emotional analysis: ${JSON.stringify(emotionalAnalysis)}
-                And reasoning steps: ${JSON.stringify(reactStep)}
-                Considering previous interactions: ${JSON.stringify(relevantMemories)}
-                Generate a supportive and personalized response.
-              `}]
-            },
-            { 
-              role: "user", 
-              parts: [{ text: state.messages[state.messages.length - 1] }]
-            }
-          ]
+          contents: [{ 
+            role: "user", 
+            parts: [{ text: responsePrompt }]
+          }]
         });
 
-        // Step 5: Store interaction in memory
-        await memorySystem.addMemory(
+        // Step 5: Store interaction
+        const memoryEntry = {
+          messages: state.messages.map(msg => ({
+            content: msg.content,
+            role: msg.role,
+            createdAt: new Date().toISOString()
+          })),
+          metadata: {
+            emotionalState: emotionalAnalysis.emotionalState,
+            context: state.context,
+            reactStep
+          }
+        };
+
+        await memoryService.addMemory(
+          memoryEntry.messages,
           state.userId,
-          state.messages[state.messages.length - 1],
-          emotionalAnalysis.emotionalState
+          memoryEntry.metadata
         );
 
+        const responseText = response.response.text();
+
         return {
-          ...state,
+          success: true,
           emotionalState: emotionalAnalysis.emotionalState,
           reactSteps: [...(state.reactSteps || []), reactStep],
-          response: response.response.text(),
-          success: true,
-          timestamp: new Date().toISOString()
+          response: responseText,
+          timestamp: new Date().toISOString(),
+          currentStep: state.currentStep,
+          userId: state.userId
         };
+
       } catch (error) {
         console.error("Hybrid agent error:", error);
         return {
-          ...state,
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
+          reactSteps: state.reactSteps || [],
+          currentStep: state.currentStep,
+          userId: state.userId,
+          timestamp: new Date().toISOString()
         };
       }
     }

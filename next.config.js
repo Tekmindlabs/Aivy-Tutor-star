@@ -25,19 +25,32 @@ const nextConfig = {
       };
     } else {
       // Server-side: Use ONNX runtime node
-      config.externals = [...(config.externals || [])];
+      config.externals = [
+        ...(config.externals || []),
+        { 'onnxruntime-node': 'onnxruntime-node' }
+      ];
       
-      // Add proper node-loader configuration
+      // Add proper node-loader configuration with unique names
       config.module.rules.push({
         test: /\.node$/,
         loader: 'node-loader',
         options: {
-          name: '[name].[ext]',
+          name: '[name].[hash].[ext]', // Add hash to ensure unique filenames
         }
       });
     }
 
+    // Prevent multiple compilations of the same asset
+    config.output = {
+      ...config.output,
+      uniqueName: isServer ? 'server' : 'client',
+    };
+
     return config;
+  },
+  // Add experimental features to handle native dependencies
+  experimental: {
+    serverComponentsExternalPackages: ['onnxruntime-node']
   }
 };
 
