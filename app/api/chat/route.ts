@@ -6,6 +6,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createHybridAgent } from '@/lib/ai/hybrid-agent';
 import { AgentState, ReActStep, EmotionalState } from '@/lib/ai/agents';
 import { Message } from '@/types/chat';
+import { MemoryService } from '@/lib/memory/memory-service';
 
 if (!process.env.GOOGLE_AI_API_KEY) {
   throw new Error("GOOGLE_AI_API_KEY is not set");
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
     });
 
     try {
-      const hybridAgent = createHybridAgent(model);
+      const hybridAgent = createHybridAgent(model, memoryService);
       
       const initialState = {
         messages: messages.map(m => m.content),

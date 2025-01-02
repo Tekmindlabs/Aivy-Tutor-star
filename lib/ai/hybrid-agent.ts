@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createEmotionalAgent } from "./emotional-agent";
+import { MemoryService } from "../memory/memory-service";
 
 interface ReActStep {
   thought: string;
@@ -11,15 +12,48 @@ interface ReActStep {
 interface HybridState extends AgentState {
   reactSteps: ReActStep[];
   currentStep: string;
+  userId: string; // Added for memory management
+}
+
+interface Memory {
+  id: string;
+  content: string;
+  emotionalState: any;
+  timestamp: string;
+  userId: string;
+}
+
+// In-memory storage
+class MemorySystem {
+  private memories: Memory[] = [];
+
+  async addMemory(userId: string, content: string, emotionalState: any): Promise<void> {
+    this.memories.push({
+      id: crypto.randomUUID(),
+      content,
+      emotionalState,
+      timestamp: new Date().toISOString(),
+      userId
+    });
+  }
+
+  async getRelevantMemories(userId: string, currentContent: string): Promise<Memory[]> {
+    return this.memories
+      .filter(memory => memory.userId === userId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 5); // Get 5 most recent memories
+  }
 }
 
 export const createHybridAgent = (model: any) => {
   const emotionalAgent = createEmotionalAgent(model);
+  const memorySystem = new MemorySystem();
   
   const executeReActStep = async (
     step: string, 
     context: any,
-    emotionalState: any
+    emotionalState: any,
+    memories: Memory[]
   ): Promise<ReActStep> => {
     const prompt = `
       As an emotionally intelligent AI tutor:
@@ -29,10 +63,14 @@ export const createHybridAgent = (model: any) => {
       - Confidence Level: ${emotionalState.confidence}
       - Previous Steps: ${context.reactSteps?.length || 0}
       
+      Previous Interactions:
+      ${memories.map(m => `- ${m.content} (Emotional State: ${m.emotionalState.mood})`).join('\n')}
+      
       Thought Process:
       1. Consider emotional state and learning needs
-      2. Plan appropriate response strategy
-      3. Evaluate potential impact
+      2. Review previous interactions and patterns
+      3. Plan appropriate response strategy
+      4. Evaluate potential impact
       
       Current Step: ${step}
       
@@ -58,17 +96,30 @@ export const createHybridAgent = (model: any) => {
   return {
     process: async (state: HybridState) => {
       try {
-        // Step 1: Emotional Analysis
-        const emotionalAnalysis = await emotionalAgent(state);
+        // Step 1: Retrieve relevant memories
+        const relevantMemories = await memorySystem.getRelevantMemories(
+          state.userId,
+          state.messages[state.messages.length - 1]
+        );
+
+        // Step 2: Emotional Analysis
+        const emotionalAnalysis = await emotionalAgent({
+          ...state,
+          context: {
+            ...state.context,
+            previousMemories: relevantMemories
+          }
+        });
         
-        // Step 2: ReAct Planning
+        // Step 3: ReAct Planning
         const reactStep = await executeReActStep(
           state.currentStep,
           state,
-          emotionalAnalysis.emotionalState
+          emotionalAnalysis.emotionalState,
+          relevantMemories
         );
         
-        // Step 3: Generate Response
+        // Step 4: Generate Response
         const response = await model.generateContent({
           contents: [
             { 
@@ -76,6 +127,7 @@ export const createHybridAgent = (model: any) => {
               parts: [{ text: `
                 Using the emotional analysis: ${JSON.stringify(emotionalAnalysis)}
                 And reasoning steps: ${JSON.stringify(reactStep)}
+                Considering previous interactions: ${JSON.stringify(relevantMemories)}
                 Generate a supportive and personalized response.
               `}]
             },
@@ -85,6 +137,13 @@ export const createHybridAgent = (model: any) => {
             }
           ]
         });
+
+        // Step 5: Store interaction in memory
+        await memorySystem.addMemory(
+          state.userId,
+          state.messages[state.messages.length - 1],
+          emotionalAnalysis.emotionalState
+        );
 
         return {
           ...state,
