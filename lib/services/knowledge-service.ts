@@ -1,17 +1,18 @@
+import { getEmbedding } from '@/lib/knowledge/embeddings';
 import { insertVector, searchSimilarContent } from '@/lib/milvus/vectors';
-import { createRelationship, findRelatedContent } from '@/lib/milvus/knowledge-graph';
 import { Document, Note, URL, Vector } from '@/lib/knowledge/types';
 import { handleMilvusError } from '@/lib/milvus/error-handler';
 
 export class KnowledgeService {
   async addDocument(userId: string, document: Document): Promise<void> {
     try {
-      // Insert document vector
+      const embedding = await getEmbedding(document.content);
+      
       await insertVector({
         userId,
         contentType: 'document',
         contentId: document.id,
-        embedding: document.embedding,
+        embedding,
         metadata: {
           title: document.title,
           fileType: document.fileType,
@@ -23,11 +24,12 @@ export class KnowledgeService {
     }
   }
 
-  async searchRelatedContent(userId: string, query: number[]): Promise<Vector[]> {
+  async searchRelatedContent(userId: string, query: string): Promise<Vector[]> {
     try {
+      const embedding = await getEmbedding(query);
       const results = await searchSimilarContent({
         userId,
-        embedding: query,
+        embedding,
         limit: 5,
         contentTypes: ['document', 'note', 'url']
       });
@@ -38,20 +40,35 @@ export class KnowledgeService {
     }
   }
 
-  async createContentRelationship(
-    userId: string,
-    sourceId: string,
-    targetId: string,
-    type: string
-  ): Promise<void> {
+  async addNote(userId: string, note: Note): Promise<void> {
     try {
-      await createRelationship({
+      const embedding = await getEmbedding(note.content);
+      await insertVector({
         userId,
-        sourceId,
-        targetId,
-        relationshipType: type,
+        contentType: 'note',
+        contentId: note.id,
+        embedding,
         metadata: {
-          createdAt: new Date().toISOString()
+          title: note.title,
+          tags: note.tags
+        }
+      });
+    } catch (error) {
+      handleMilvusError(error);
+    }
+  }
+
+  async addURL(userId: string, url: URL): Promise<void> {
+    try {
+      const embedding = await getEmbedding(url.content);
+      await insertVector({
+        userId,
+        contentType: 'url',
+        contentId: url.id,
+        embedding,
+        metadata: {
+          url: url.url,
+          title: url.title
         }
       });
     } catch (error) {

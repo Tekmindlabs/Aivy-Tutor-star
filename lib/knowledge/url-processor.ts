@@ -1,43 +1,52 @@
 import { URL } from './types';
 import { prisma } from '@/lib/prisma';
 import { getEmbedding } from './embeddings';
+import { insertVector } from '../milvus/vectors';
 
 export async function processURL(
   url: string,
   userId: string
 ): Promise<URL> {
-  const response = await fetch(url);
-  const html = await response.text();
-  
-  // Extract main content (simplified)
-  const content = extractContent(html);
-  const title = extractTitle(html);
-  
-  const embedding = await getEmbedding(content);
+  try {
+    const response = await fetch(url);
+    const html = await response.text();
+    const content = extractContent(html);
+    const title = extractTitle(html);
+    
+    const embedding = await getEmbedding(content);
+    console.log('URL content embedding generated:', embedding.length);
 
-  const urlDoc = await prisma.urls.create({
-    data: {
+    // Create URL document
+    const urlDoc = await prisma.urls.create({
+      data: {
+        userId,
+        url,
+        title,
+        content,
+      },
+    });
+
+    // Store vector in Milvus
+    await insertVector({
       userId,
-      url,
-      title,
-      content,
-    },
-  });
-
-  await prisma.vectors.create({
-    data: {
       contentType: 'url',
       contentId: urlDoc.id,
       embedding,
-    },
-  });
+      metadata: {
+        url,
+        title
+      }
+    });
 
-  return urlDoc;
+    return urlDoc;
+  } catch (error) {
+    console.error('Error processing URL:', error);
+    throw error;
+  }
 }
 
 function extractContent(html: string): string {
-  // Simplified content extraction
-  // In production, use a proper HTML parser
+  // Implement proper HTML content extraction
   return html.replace(/<[^>]*>/g, ' ').trim();
 }
 
