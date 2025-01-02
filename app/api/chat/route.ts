@@ -15,6 +15,20 @@ interface ChatCompletionMessage {
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
 
+const getPersonalizedContext = (user: any) => {
+  const ageGroup = user.age < 15 ? 'child' : user.age < 18 ? 'teen' : 'adult';
+  const difficulty = user.difficultyPreference || 'intermediate';
+  const style = user.learningStyle || 'visual';
+  
+  return `
+    You are talking to a ${ageGroup} aged ${user.age}. 
+    Their learning style is ${style} and preferred difficulty is ${difficulty}.
+    Their interests include: ${user.interests?.join(', ')}.
+    Please adjust your language, examples, and explanations accordingly.
+    For ${ageGroup}s, use ${difficulty}-level vocabulary and ${style}-focused explanations.
+  `;
+};
+
 const getGreeting = (userName: string) => {
   const hour = new Date().getHours();
   let timeBasedGreeting = "";
@@ -27,7 +41,7 @@ const getGreeting = (userName: string) => {
   
   const greetingParts = [
     `${timeBasedGreeting}, ${userName}! ${emoji}`,
-    "I'm Aivy, your personal AI tutor here to guide and support you.",
+    "I'm Aivy, your personal AI companion here to guide and support you.",
     "What's on your mind today? Let's explore together!",
   ];
 
@@ -77,15 +91,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate message
     const lastMessage = messages[messages.length - 1].content;
     if (!lastMessage?.trim() || lastMessage.length < 2) {
       return new Response("Invalid message", { status: 400 });
     }
 
     const { stream, handlers } = LangChainStream();
+    const personalizedContext = getPersonalizedContext(user);
 
-    // Create chat record
     const chat = await prisma.chat.create({
       data: {
         userId: user.id,
@@ -94,12 +107,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Process in background
     (async () => {
       try {
         const model = genAI.getGenerativeModel({ model: "gemini-pro" });
         const response = await model.generateContent({
-          contents: [{ role: "user", parts: [{ text: lastMessage }]}],
+          contents: [
+            { role: "system", parts: [{ text: personalizedContext }]},
+            { role: "user", parts: [{ text: lastMessage }]}
+          ],
           generationConfig: {
             temperature: 0.7,
             maxOutputTokens: 1000,
@@ -107,23 +122,20 @@ export async function POST(req: NextRequest) {
         });
 
         const result = await response.response;
-const text = result.text();
+        const text = result.text();
 
-// Send the response in larger, more meaningful chunks
-const chunks = text.match(/[^.!?]+[.!?]+/g) || [text];
-for (const chunk of chunks) {
-  const messageChunk = {
-    id: crypto.randomUUID(),
-    role: 'assistant' as const,
-    content: chunk.trim(),
-    createdAt: new Date().toISOString()
-  };
-  await handlers.handleLLMNewToken(JSON.stringify(messageChunk));
-  // Reduced delay between chunks
-  await new Promise(resolve => setTimeout(resolve, 10));
-}
+        const chunks = text.match(/[^.!?]+[.!?]+/g) || [text];
+        for (const chunk of chunks) {
+          const messageChunk = {
+            id: crypto.randomUUID(),
+            role: 'assistant' as const,
+            content: chunk.trim(),
+            createdAt: new Date().toISOString()
+          };
+          await handlers.handleLLMNewToken(JSON.stringify(messageChunk));
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
 
-        // Update chat record
         await prisma.chat.update({
           where: { id: chat.id },
           data: { response: text },
