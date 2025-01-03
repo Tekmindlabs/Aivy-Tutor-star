@@ -1,4 +1,5 @@
-interface Document {
+// types.ts
+export interface Document {
   id: string;
   title: string;
   content: string;
@@ -8,7 +9,7 @@ interface Document {
   version: number;
   createdAt: Date;
   updatedAt: Date;
-  fileType: string; // This is now extracted from metadata
+  fileType: string;
 }
 
 export interface URL {
