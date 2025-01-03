@@ -4,16 +4,22 @@ const MILVUS_ADDRESS = process.env.MILVUS_ADDRESS || 'localhost:19530';
 const MILVUS_TOKEN = process.env.MILVUS_TOKEN;
 
 class MilvusConnection {
-  private static instance: InstanceType<typeof MilvusClient>;
+  private static instance: MilvusClient;
 
   private constructor() {}
 
-  public static async getInstance(): Promise<InstanceType<typeof MilvusClient>> {
+  public static async getInstance(): Promise<MilvusClient> {
     if (!MilvusConnection.instance) {
-      MilvusConnection.instance = new MilvusClient({
+      const config = {
         address: MILVUS_ADDRESS,
-        token: MILVUS_TOKEN
-      });
+        ssl: MILVUS_ADDRESS.startsWith('https'),
+      };
+
+      if (MILVUS_TOKEN) {
+        Object.assign(config, { token: MILVUS_TOKEN });
+      }
+
+      MilvusConnection.instance = new MilvusClient(config);
     }
     return MilvusConnection.instance;
   }
