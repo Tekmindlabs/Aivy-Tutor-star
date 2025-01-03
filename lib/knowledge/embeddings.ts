@@ -9,30 +9,56 @@ class TensorConversionError extends Error {
   }
 }
 
-// Utility function for tensor conversion
-function convertToTypedArray(data: ArrayBuffer | ArrayLike<number>): Float32Array {
+// Updated tensor conversion utility with proper type handling
+function convertToTypedArray(data: unknown): Float32Array {
   try {
-    // If data is ArrayBuffer, create a view first
+    // Handle direct Float32Array
+    if (data instanceof Float32Array) {
+      return data;
+    }
+
+    // Handle tensor-like objects with cpuData property
+    if (data && typeof data === 'object' && 'cpuData' in data) {
+      const cpuData = data.cpuData;
+      
+      // Handle BigInt64Array
+      if (cpuData instanceof BigInt64Array) {
+        return new Float32Array(Array.from(cpuData).map(Number));
+      }
+      
+      // Handle TypedArrays
+      if (ArrayBuffer.isView(cpuData)) {
+        return new Float32Array(Array.from(cpuData));
+      }
+      
+      // Handle array-like objects
+      if (Array.isArray(cpuData)) {
+        return new Float32Array(cpuData);
+      }
+    }
+
+    // Handle direct BigInt64Array
+    if (data instanceof BigInt64Array) {
+      return new Float32Array(Array.from(data).map(Number));
+    }
+
+    // Handle ArrayBuffer
     if (data instanceof ArrayBuffer) {
       return new Float32Array(data);
     }
-    
-    // If it's BigInt64Array, convert to numbers
-    if (data instanceof BigInt64Array) {
-      return new Float32Array(Array.from(data, Number));
+
+    // Handle arrays
+    if (Array.isArray(data)) {
+      return new Float32Array(data);
     }
-    
-    // If already a typed array, convert to Float32Array
-    if (ArrayBuffer.isView(data)) {
-      return new Float32Array(Array.from(data as any));
+
+    throw new TensorConversionError('Unsupported data type for tensor conversion');
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error('Tensor conversion error:', error.message);
+      throw new TensorConversionError(`Failed to convert tensor data: ${error.message}`);
     }
-    
-    // If regular array-like object, convert directly
-    return new Float32Array(data);
-  } catch (err) {
-    const error = err instanceof Error ? err : new Error('Unknown error');
-    console.error('Error converting tensor data:', error);
-    throw new TensorConversionError(`Failed to convert tensor data: ${error.message}`);
+    throw new TensorConversionError('Unknown error during tensor conversion');
   }
 }
 
@@ -40,18 +66,6 @@ function convertToTypedArray(data: ArrayBuffer | ArrayLike<number>): Float32Arra
 export interface EmbeddingOutput {
   data: Float32Array;
   dimensions: number;
-}
-
-interface TensorInput {
-  input_ids: { cpuData: ArrayLike<number> };
-  attention_mask: { cpuData: ArrayLike<number> };
-  token_type_ids: { cpuData: ArrayLike<number> };
-}
-
-interface ProcessedTensor {
-  input_ids: Float32Array;
-  attention_mask: Float32Array;
-  token_type_ids: Float32Array;
 }
 
 interface ModelOutput {
@@ -86,7 +100,7 @@ export class EmbeddingModel {
           revision: 'main',
           quantized: false,
           executionProviders: ['cpu'] as const,
-          graphOptimizationLevel: 'all' as const,
+          graphOptimizationLevel: 'all' as const
         };
 
         const model = await pipeline('feature-extraction', 'Xenova/gte-base', options);
@@ -95,12 +109,14 @@ export class EmbeddingModel {
           throw new Error('Failed to initialize embedding model');
         }
 
-        this.instance = model as FeatureExtractionPipeline;
+        this.instance = model;
         return this.instance;
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error('Unknown error');
-        console.error('Error loading model:', error);
-        throw new Error(`Model initialization failed: ${error.message}`);
+      } catch (error) {
+        if (error instanceof Error) {
+          console.error('Error loading model:', error.message);
+          throw new Error(`Model initialization failed: ${error.message}`);
+        }
+        throw new Error('Unknown error during model initialization');
       } finally {
         this.isLoading = false;
         this.loadingPromise = null;
@@ -110,66 +126,49 @@ export class EmbeddingModel {
     return this.loadingPromise;
   }
 
-  static async processTensorInput(input: TensorInput): Promise<ProcessedTensor> {
-    try {
-      const convertInput = (data: ArrayLike<number>) => {
-        if (data instanceof BigInt64Array) {
-          return new Float32Array(Array.from(data).map(Number));
-        }
-        return new Float32Array(Array.from(data));
-      };
-  
-      return {
-        input_ids: convertInput(input.input_ids.cpuData),
-        attention_mask: convertInput(input.attention_mask.cpuData),
-        token_type_ids: convertInput(input.token_type_ids.cpuData)
-      };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error('Unknown error');
-      console.error('Error processing tensor input:', error);
-      throw new Error(`Tensor processing failed: ${error.message}`);
-    }
-  }
-
   static async generateEmbedding(text: string): Promise<EmbeddingOutput> {
-    if (!text) {
-      throw new Error("Text may not be null or undefined");
+    if (!text || typeof text !== 'string') {
+      throw new Error('Invalid input: text must be a non-empty string');
     }
-    
+
     try {
       const model = await this.getInstance();
-      const output = await model(text, {
+      
+      // Pre-process text
+      const processedText = text.trim();
+      
+      // Generate embedding with specific options
+      const output = await model(processedText, {
         pooling: 'mean',
-        normalize: true
+        normalize: true,
+        padding: true,
+        truncation: true,
+        max_length: 512
       });
-  
-      // The model output is already a Float32Array or similar
-      // No need to process it as a TensorInput
-      const embedding = convertToTypedArray(output.data);
+
+      // Convert output to Float32Array
+      const embedding = convertToTypedArray(output.data || output);
       
       return {
         data: embedding,
         dimensions: embedding.length
       };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error('Unknown error');
-      console.error('Error generating embedding:', error);
-      throw new Error(`Embedding generation failed: ${error.message}`);
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error('Error generating embedding:', error.message);
+        throw new Error(`Embedding generation failed: ${error.message}`);
+      }
+      throw new Error('Unknown error during embedding generation');
     }
   }
+}
 
-  interface SearchParams {
-    userId: string;
-    embedding: number[];
-    limit?: number;
-    contentTypes?: string[];
-  }
-  
-  export async function semanticSearch(
-    query: string,
-    userId: string,
-    limit: number = 5
-  ): Promise<any[]> {
+// Semantic search function
+export async function semanticSearch(
+  query: string,
+  userId: string,
+  limit: number = 5
+): Promise<any[]> {
   try {
     const { data } = await EmbeddingModel.generateEmbedding(query);
     
@@ -179,9 +178,11 @@ export class EmbeddingModel {
       limit,
       contentTypes: ['document', 'note', 'url']
     });
-  } catch (err) {
-    const error = err instanceof Error ? err : new Error('Unknown error');
-    console.error('Error in semantic search:', error);
-    throw new Error(`Semantic search failed: ${error.message}`);
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error('Error in semantic search:', error.message);
+      throw new Error(`Semantic search failed: ${error.message}`);
+    }
+    throw new Error('Unknown error during semantic search');
   }
 }
