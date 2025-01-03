@@ -1,17 +1,16 @@
 import { getMilvusClient } from '../lib/milvus/client';
-import { handleMilvusError } from '../lib/milvus/error-handler';
 
 async function testConnection() {
   try {
-    console.log('Attempting to connect to Milvus at:', process.env.MILVUS_ADDRESS);
     const client = await getMilvusClient();
-    console.log('Successfully connected to Milvus!');
+    console.log('Testing connection...');
     
-    // Try to list collections to verify connection
+    // Test basic operations
     const collections = await client.listCollections();
-    console.log('Available collections:', collections);
+    console.log('Connected successfully! Available collections:', collections);
+    
   } catch (error) {
-    handleMilvusError(error);
+    console.error('Connection failed:', error);
     process.exit(1);
   }
 }
