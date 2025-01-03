@@ -1,3 +1,7 @@
+// scripts/setup-milvus.ts
+import * as dotenv from 'dotenv';
+dotenv.config(); // Add this line at the top
+
 import { initializeMilvus } from '../app/api/init';
 
 async function setup() {
