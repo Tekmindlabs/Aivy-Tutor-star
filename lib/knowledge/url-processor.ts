@@ -19,7 +19,7 @@ export async function processURL(
     console.log('URL content embedding generated:', embedding.length);
 
     // Create URL document
-    const urlDoc = await prisma.uRL.create({  // Note: Changed from urls to uRL
+    const urlDoc = await prisma.url.create({
       data: {
         userId,
         url,

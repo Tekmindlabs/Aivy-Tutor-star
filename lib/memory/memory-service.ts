@@ -1,6 +1,7 @@
-import { getEmbedding } from '@/lib/knowledge/embeddings';
-import { Message } from '@/types/chat';
-import { insertVector, searchSimilarContent } from '@/lib/milvus/vectors';
+import { Message } from '@/types/chat'; // Update the import path
+import { VectorResult } from '@/lib/knowledge/types';
+import { getEmbedding } from '@/lib/knowledge/embeddings'; // Update the import path
+import { insertVector, searchSimilarContent } from '@/lib/milvus/vectors'; // Use searchSimilarContent instead of searchVectors
 
 interface MemoryEntry {
   id: string;
@@ -16,7 +17,6 @@ export class MemoryService {
     userId: string, 
     metadata: Record<string, any> = {}
   ): Promise<MemoryEntry> {
-    // Generate embedding from the last message
     const lastMessage = messages[messages.length - 1];
     const embedding = await getEmbedding(lastMessage.content);
 
@@ -28,17 +28,16 @@ export class MemoryService {
       timestamp: new Date()
     };
 
-    // Store vector in Milvus
-    await insertVector(
+    await insertVector({
       userId,
-      'memory',
-      memoryEntry.id,
-      embedding,
-      {
+      contentType: 'memory',
+      contentId: memoryEntry.id,
+      embedding: Array.from(embedding),
+      metadata: {
         messages: JSON.stringify(messages),
         metadata: JSON.stringify(metadata)
       }
-    );
+    });
 
     return memoryEntry;
   }
@@ -46,23 +45,24 @@ export class MemoryService {
   async searchMemories(
     query: string,
     userId: string,
-    limit: number = 5
+    limit?: number
   ): Promise<MemoryEntry[]> {
-    const queryEmbedding = await getEmbedding(query);
-    
-    const results = await searchSimilarContent({
+    const embedding = await getEmbedding(query);
+    const searchEmbedding = Array.from(embedding);
+
+    const results = await searchSimilarContent({ // Changed from searchVectors to searchSimilarContent
       userId,
-      embedding: queryEmbedding,
+      embedding: searchEmbedding,
       limit,
       contentTypes: ['memory']
     });
 
-    return results.map(result => ({
+    return results.map((result: VectorResult) => ({
       id: result.content_id,
-      messages: JSON.parse(result.metadata.messages),
-      metadata: JSON.parse(result.metadata.metadata),
-      userId,
-      timestamp: new Date(result.metadata.timestamp)
+      messages: JSON.parse(result.metadata).messages,
+      metadata: JSON.parse(result.metadata).metadata,
+      userId: result.user_id,
+      timestamp: new Date()
     }));
   }
 }
