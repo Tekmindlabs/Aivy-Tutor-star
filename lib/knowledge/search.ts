@@ -9,13 +9,12 @@ export async function searchKnowledgeBase(
   limit: number = 10
 ): Promise<any[]> {
   try {
-    const queryEmbedding = await getEmbedding(query);
-    console.log('Search query embedding generated:', queryEmbedding.length);
+    const { data } = await EmbeddingModel.generateEmbedding(query);
+    console.log('Search query embedding generated:', data.length);
 
-    // Search for similar content using Milvus
     const similarContent = await searchSimilarContent({
       userId,
-      embedding: queryEmbedding,
+      embedding: Array.from(data),
       limit
     });
 

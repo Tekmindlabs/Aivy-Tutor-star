@@ -1,8 +1,16 @@
 import { pipeline, Pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
 import { searchSimilarContent } from '../milvus/vectors';
 
+// Custom error type
+class TensorConversionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TensorConversionError';
+  }
+}
+
 // Utility function for tensor conversion
-function convertToTypedArray(data: any[]): Float32Array {
+function convertToTypedArray(data: ArrayBuffer | ArrayLike<number>): Float32Array {
   try {
     // Convert BigInt64Array to regular numbers first
     if (data instanceof BigInt64Array) {
@@ -14,18 +22,32 @@ function convertToTypedArray(data: any[]): Float32Array {
     }
     // If regular array, convert directly
     return new Float32Array(data);
-  } catch (error) {
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error('Unknown error');
     console.error('Error converting tensor data:', error);
-    throw new Error('Failed to convert tensor data to proper format');
+    throw new TensorConversionError(`Failed to convert tensor data: ${error.message}`);
   }
 }
 
-// Define the interface before the class
+// Define interfaces
 export interface EmbeddingOutput {
-  data: Float32Array | number[];
+  data: Float32Array;
+  dimensions: number;
 }
 
-class EmbeddingModel {
+interface TensorInput {
+  input_ids: { cpuData: ArrayLike<number> };
+  attention_mask: { cpuData: ArrayLike<number> };
+  token_type_ids: { cpuData: ArrayLike<number> };
+}
+
+interface ProcessedTensor {
+  input_ids: Float32Array;
+  attention_mask: Float32Array;
+  token_type_ids: Float32Array;
+}
+
+export class EmbeddingModel {
   private static instance: FeatureExtractionPipeline | null = null;
   private static isLoading: boolean = false;
   private static loadingPromise: Promise<FeatureExtractionPipeline> | null = null;
@@ -45,29 +67,24 @@ class EmbeddingModel {
         console.log('Loading GTE-Base model...');
         
         const options = {
-          executionProviders: ['cpu'],
-          graphOptimizationLevel: 'all',
-          tensorFormat: {
-            inputFormat: 'float32',
-            outputFormat: 'float32'
-          }
-        };
-
-        const model = await pipeline('feature-extraction', 'Xenova/gte-base', {
           revision: 'main',
           quantized: false,
-          ...options
-        }) as FeatureExtractionPipeline;
+          executionProviders: ['cpu'] as const,
+          graphOptimizationLevel: 'all' as const,
+        };
 
+        const model = await pipeline('feature-extraction', 'Xenova/gte-base', options);
+        
         if (!model) {
           throw new Error('Failed to initialize embedding model');
         }
 
-        this.instance = model;
+        this.instance = model as FeatureExtractionPipeline;
         return this.instance;
-      } catch (error) {
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Unknown error');
         console.error('Error loading model:', error);
-        throw error;
+        throw new Error(`Model initialization failed: ${error.message}`);
       } finally {
         this.isLoading = false;
         this.loadingPromise = null;
@@ -77,46 +94,43 @@ class EmbeddingModel {
     return this.loadingPromise;
   }
 
-  static async processTensorInput(input: any) {
+  static async processTensorInput(input: TensorInput): Promise<ProcessedTensor> {
     try {
-      const tensor = {
+      return {
         input_ids: convertToTypedArray(Array.from(input.input_ids.cpuData)),
         attention_mask: convertToTypedArray(Array.from(input.attention_mask.cpuData)),
         token_type_ids: convertToTypedArray(Array.from(input.token_type_ids.cpuData))
       };
-      return tensor;
-    } catch (error) {
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Unknown error');
       console.error('Error processing tensor input:', error);
-      throw new Error('Failed to process tensor input');
+      throw new Error(`Tensor processing failed: ${error.message}`);
     }
   }
-}
 
-export async function getEmbedding(text: string): Promise<number[]> {
-  if (!text) {
-    throw new Error("text may not be null or undefined");
-  }
-  
-  try {
-    const model = await EmbeddingModel.getInstance();
-    if (!model) {
-      throw new Error('Model not initialized');
+  static async generateEmbedding(text: string): Promise<EmbeddingOutput> {
+    if (!text) {
+      throw new Error("Text may not be null or undefined");
     }
+    
+    try {
+      const model = await this.getInstance();
+      const output = await model(text, {
+        pooling: 'mean',
+        normalize: true
+      });
 
-    const output = await model(text, {
-      pooling: 'mean',
-      normalize: true,
-      convertToTensor: true // Add this option
-    }) as EmbeddingOutput;
-
-    // Ensure output.data is converted to regular array
-    if (output.data instanceof Float32Array) {
-      return Array.from(output.data);
+      const embedding = convertToTypedArray(output.data);
+      
+      return {
+        data: embedding,
+        dimensions: embedding.length
+      };
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Unknown error');
+      console.error('Error generating embedding:', error);
+      throw new Error(`Embedding generation failed: ${error.message}`);
     }
-    return Array.from(convertToTypedArray(output.data));
-  } catch (error) {
-    console.error('Error generating embedding:', error);
-    throw error;
   }
 }
 
@@ -133,18 +147,17 @@ export async function semanticSearch(
   limit: number = 5
 ): Promise<any[]> {
   try {
-    const queryEmbedding = await getEmbedding(query);
+    const { data } = await EmbeddingModel.generateEmbedding(query);
     
     return await searchSimilarContent({
       userId,
-      embedding: queryEmbedding,
+      embedding: Array.from(data),
       limit,
       contentTypes: ['document', 'note', 'url']
     });
-  } catch (error) {
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error('Unknown error');
     console.error('Error in semantic search:', error);
-    throw error;
+    throw new Error(`Semantic search failed: ${error.message}`);
   }
 }
-
-export { EmbeddingModel };

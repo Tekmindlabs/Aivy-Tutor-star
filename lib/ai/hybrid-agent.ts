@@ -40,7 +40,12 @@ export interface HybridState extends AgentState {
     recommendations: string;
     previousMemories?: Memory[];
   };
-  processedTensors?: any; // Add this line
+  processedTensors?: {
+    embedding: number[];
+    input_ids: Float32Array;
+    attention_mask: Float32Array;
+    token_type_ids: Float32Array;
+  };
 }
 
 interface HybridResponse {

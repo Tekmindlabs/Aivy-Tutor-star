@@ -7,7 +7,7 @@ import { createHybridAgent, HybridState } from '@/lib/ai/hybrid-agent'; // Added
 import { AgentState, ReActStep, EmotionalState } from '@/lib/ai/agents';
 import { Message } from '@/types/chat';
 import { MemoryService } from '@/lib/memory/memory-service';
-import { EmbeddingModel } from '@/lib/knowledge/embeddings';
+import { getEmbedding } from "@/lib/knowledge/embeddings";
 
 // Type definitions
 interface SuccessResponse {
@@ -106,19 +106,19 @@ export async function POST(req: NextRequest) {
 
       // Generate embedding for the last message
       const lastMessage = processedMessages[processedMessages.length - 1];
-      let processedTensors;
-      try {
-        const embedding = await getEmbedding(lastMessage.content);
-        processedTensors = {
-          embedding,
-          input_ids: new Float32Array(embedding),
-          attention_mask: new Float32Array(embedding.length).fill(1),
-          token_type_ids: new Float32Array(embedding.length).fill(0)
-        };
-      } catch (error) {
-        console.error("Error processing tensors:", error);
-        throw new Error(`Tensor processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
+let processedTensors;
+try {
+  const { data, dimensions } = await EmbeddingModel.generateEmbedding(lastMessage.content);
+  processedTensors = await EmbeddingModel.processTensorInput({
+    input_ids: { cpuData: data },
+    attention_mask: { cpuData: new Float32Array(dimensions).fill(1) },
+    token_type_ids: { cpuData: new Float32Array(dimensions).fill(0) }
+  });
+  processedTensors.embedding = Array.from(data);
+} catch (error) {
+  console.error("Error:", error instanceof Error ? error.message : String(error));
+  throw new Error(`Embedding generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+}
 
       // Create initial state for hybrid agent
       const initialState: HybridState = {
