@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/auth"; // Updated to use auth instead of getSession
+import { getServerSession } from "next-auth";
+import { authConfig } from "@/lib/auth/config";
 import { StreamingTextResponse, LangChainStream } from 'ai';
 import { prisma } from "@/lib/prisma";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -67,10 +68,19 @@ export async function POST(req: NextRequest) {
   const runId = crypto.randomUUID();
   let currentStep = STEPS.INIT;
   
+  // Add request deduplication
+  const requestId = req.headers.get('x-request-id') || runId;
+  const cache = await caches.open('chat-requests');
+  const existing = await cache.match(requestId);
+  
+  if (existing) {
+    return existing;
+  }
+  
   try {
     // Authentication
     currentStep = STEPS.AUTH;
-    const session = await auth();
+    const session = await getServerSession(authConfig);
     if (!session?.user?.id) {
       return new Response(
         JSON.stringify({ error: "Unauthorized" }), 
