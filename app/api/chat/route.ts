@@ -101,18 +101,20 @@ if (!messages?.length || !messages[messages.length - 1]?.content) {
       // Add tensor processing here, before creating initialState
       let processedTensors;
       try {
-        // This assumes inputTensors come from the request or previous processing
-        // You'll need to extract or create inputTensors based on your messages
         const inputTensors = {
-          input_ids: messages[messages.length - 1].content, // Convert message to tensor format
-          attention_mask: null, // Add appropriate attention mask
-          token_type_ids: null // Add appropriate token type ids
+          input_ids: messages[messages.length - 1].content,
+          attention_mask: new Float32Array(messages[messages.length - 1].content.length).fill(1),
+          token_type_ids: new Float32Array(messages[messages.length - 1].content.length).fill(0)
         };
-
+      
         processedTensors = await EmbeddingModel.processTensorInput(inputTensors);
-      } catch (tensorError) {
-        console.error("Error processing tensors:", tensorError);
-        throw new Error(`Tensor processing failed: ${tensorError.message}`);
+      } catch (error: unknown) {
+        console.error("Error processing tensors:", error);
+        if (error instanceof Error) {
+          throw new Error(`Tensor processing failed: ${error.message}`);
+        } else {
+          throw new Error('Tensor processing failed: Unknown error');
+        }
       }
 
       // Update initialState to include processed tensors
@@ -204,10 +206,11 @@ if (!messages?.length || !messages[messages.length - 1]?.content) {
         content: finalResponse,
         createdAt: new Date().toISOString()
       };
-
+      
       await handlers.handleLLMNewToken(finalResponse);
-      await handlers.handleLLMEnd(messageData);
-
+      // Pass both messageData and runId
+      await handlers.handleLLMEnd(messageData, runId);
+      
       return new StreamingTextResponse(stream);
 
     } catch (error) {

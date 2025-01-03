@@ -1,7 +1,7 @@
 import { pipeline, Pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
 import { searchSimilarContent } from '../milvus/vectors';
 
-// Add utility function for tensor conversion
+// Utility function for tensor conversion
 function convertToTypedArray(data: any[]): Float32Array {
   try {
     return new Float32Array(data);
@@ -9,6 +9,11 @@ function convertToTypedArray(data: any[]): Float32Array {
     console.error('Error converting tensor data:', error);
     throw new Error('Failed to convert tensor data to proper format');
   }
+}
+
+// Define the interface before the class
+export interface EmbeddingOutput {
+  data: Float32Array | number[];
 }
 
 class EmbeddingModel {
@@ -30,7 +35,6 @@ class EmbeddingModel {
       try {
         console.log('Loading GTE-Base model...');
         
-        // Add ONNX Runtime configuration
         const options = {
           executionProviders: ['cpu'],
           graphOptimizationLevel: 'all',
@@ -40,7 +44,6 @@ class EmbeddingModel {
           }
         };
 
-        // Initialize the model with updated configuration
         const model = await pipeline('feature-extraction', 'Xenova/gte-base', {
           revision: 'main',
           quantized: false,
@@ -65,7 +68,6 @@ class EmbeddingModel {
     return this.loadingPromise;
   }
 
-  // Add method to process input tensors
   static async processTensorInput(input: any) {
     const tensor = {
       input_ids: convertToTypedArray(input.input_ids.cpuData),
@@ -74,10 +76,6 @@ class EmbeddingModel {
     };
     return tensor;
   }
-}
-
-export interface EmbeddingOutput {
-  data: Float32Array | number[];
 }
 
 export async function getEmbedding(text: string): Promise<number[]> {
@@ -91,13 +89,11 @@ export async function getEmbedding(text: string): Promise<number[]> {
       throw new Error('Model not initialized');
     }
 
-    // Generate embedding
     const output = await model(text, {
       pooling: 'mean',
       normalize: true
     }) as EmbeddingOutput;
 
-    // Convert to regular array
     return Array.from(output.data);
   } catch (error) {
     console.error('Error generating embedding:', error);
@@ -105,7 +101,6 @@ export async function getEmbedding(text: string): Promise<number[]> {
   }
 }
 
-// Interface for search parameters
 interface SearchParams {
   userId: string;
   embedding: number[];
@@ -113,7 +108,6 @@ interface SearchParams {
   contentTypes?: string[];
 }
 
-// Keep the existing semanticSearch function
 export async function semanticSearch(
   query: string,
   userId: string,
@@ -134,5 +128,4 @@ export async function semanticSearch(
   }
 }
 
-// Export the EmbeddingModel class if needed elsewhere
 export { EmbeddingModel };

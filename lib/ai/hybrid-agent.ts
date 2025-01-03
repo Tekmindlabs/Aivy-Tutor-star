@@ -25,7 +25,7 @@ interface Memory {
   };
 }
 
-interface HybridState extends AgentState {
+export interface HybridState extends AgentState {
   reactSteps: ReActStep[];
   currentStep: string;
   userId: string;

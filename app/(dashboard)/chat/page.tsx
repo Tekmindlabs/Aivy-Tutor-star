@@ -64,9 +64,9 @@ export default function ChatPage() {
       console.error("Chat error:", error);
       
       let errorMessage = "Connection interrupted. Please try again.";
-      if (error.message.includes("timeout")) {
-        errorMessage = "Request timed out. Please try again.";
-      } else if (error.message.includes("unauthorized")) {
+  if (error.message.includes("Tensor processing failed")) {
+    errorMessage = "Error processing your message. Please try rephrasing.";
+  } else if (error.message.includes("unauthorized")) {
         errorMessage = "Session expired. Please log in again.";
       } else if (error.message.includes("Invalid message format")) {
         errorMessage = "Invalid message format. Please try again.";
