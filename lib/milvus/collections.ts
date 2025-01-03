@@ -1,5 +1,6 @@
 import { DataType } from '@zilliz/milvus2-sdk-node';
 import { getMilvusClient } from './client';
+import { ShowCollectionsResponse } from '@zilliz/milvus2-sdk-node/dist/milvus/types/Collection';
 
 export const VECTOR_DIM = 768; // GTE-Base dimension
 
@@ -11,11 +12,11 @@ export async function setupCollections() {
     await client.createCollection({
       collection_name: 'content_vectors',
       fields: [
-        { name: 'id', data_type: DataType.VARCHAR, is_primary_key: true, max_length: 36 },
-        { name: 'user_id', data_type: DataType.VARCHAR, max_length: 36 },
-        { name: 'content_type', data_type: DataType.VARCHAR, max_length: 20 },
-        { name: 'content_id', data_type: DataType.VARCHAR, max_length: 36 },
-        { name: 'embedding', data_type: DataType.FLOAT_VECTOR, dim: VECTOR_DIM },
+        { name: 'id', data_type: DataType.VarChar, is_primary_key: true, max_length: 36 },
+        { name: 'user_id', data_type: DataType.VarChar, max_length: 36 },
+        { name: 'content_type', data_type: DataType.VarChar, max_length: 20 },
+        { name: 'content_id', data_type: DataType.VarChar, max_length: 36 },
+        { name: 'embedding', data_type: DataType.FloatVector, dim: VECTOR_DIM },
         { name: 'metadata', data_type: DataType.JSON }
       ],
       enable_dynamic_field: true
@@ -26,7 +27,7 @@ export async function setupCollections() {
       collection_name: 'content_vectors',
       field_name: 'embedding',
       index_type: 'IVF_FLAT',
-      metric_type: 'COSINE', // Changed to COSINE for normalized embeddings
+      metric_type: 'COSINE',
       params: { nlist: 1024 }
     });
 
@@ -41,8 +42,8 @@ export async function setupCollections() {
 export async function collectionExists(collectionName: string): Promise<boolean> {
   try {
     const client = await getMilvusClient();
-    const collections = await client.listCollections();
-    return collections.some(collection => collection.name === collectionName);
+    const response: ShowCollectionsResponse = await client.listCollections();
+    return response.collection_names.includes(collectionName);
   } catch (error) {
     console.error('Error checking collection existence:', error);
     return false;
