@@ -139,14 +139,14 @@ export async function POST(req: NextRequest) {
     // Generate embeddings
     currentStep = STEPS.EMBED;
     const lastMessage = processedMessages[processedMessages.length - 1];
-    const { data, dimensions } = await EmbeddingModel.generateEmbedding(lastMessage.content);
-    const embedding = Array.from(data);
+    const embeddingResult = await EmbeddingModel.generateEmbedding(lastMessage.content);
+    const embedding = Array.from(embeddingResult);
     
     const processedTensors = {
-      embedding,
-      input_ids: new Float32Array(dimensions),
-      attention_mask: new Float32Array(dimensions).fill(1),
-      token_type_ids: new Float32Array(dimensions).fill(0)
+      embedding: embedding,
+      input_ids: new Float32Array(embedding.length).fill(0),
+      attention_mask: new Float32Array(embedding.length).fill(1),
+      token_type_ids: new Float32Array(embedding.length).fill(0)
     };
 
     // Process with hybrid agent
