@@ -34,6 +34,7 @@ model User {
   chats        Chat[]
   documents    Document[]
   vectorStores VectorStore[]
+  notes        Note[] 
 }
 
 model Account {
@@ -105,6 +106,19 @@ model VectorStore {
   milvusId   String   @unique // Reference to Milvus vector ID
   createdAt  DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   @db.Text
+  format    String   @default("text")
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
 }
