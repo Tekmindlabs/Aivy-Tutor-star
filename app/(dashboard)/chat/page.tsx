@@ -47,7 +47,8 @@ export default function ChatPage() {
     isLoading,
     error,
     reload,
-    setMessages
+    setMessages,
+    setInput // Add this line
   } = useChat({
     api: "/api/chat",
     initialMessages: [{
@@ -107,7 +108,7 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         id: crypto.randomUUID(),
         content: input,
         role: 'user' as const,
-        createdAt: new Date().toISOString(),
+        createdAt: new Date(), // Changed from toISOString() to Date object
       };
 
       setMessages(prev => [...prev, newMessage]);
@@ -159,7 +160,7 @@ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
                 id: crypto.randomUUID(),
                 content: chunkValue,
                 role: 'assistant' as const,
-                createdAt: new Date().toISOString(),
+                createdAt: new Date(), // Changed from string to Date object
               }
             ];
           });

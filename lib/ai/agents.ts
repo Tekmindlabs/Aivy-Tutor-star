@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Message } from "@/types/chat";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
 
@@ -19,7 +20,7 @@ export interface ReActStep {
 
 // Base state interface
 export interface AgentState {
-  messages: string[];
+  messages: Message[];
   currentStep: string;
   emotionalState: EmotionalState;
   context: {
@@ -120,7 +121,7 @@ export interface HybridResponse extends AgentResponse {
 
 // Utility function to create base agent state
 export const createInitialAgentState = (
-  messages: string[],
+  messages: Message[], 
   role: AgentRole = 'tutor'
 ): AgentState => ({
   messages,

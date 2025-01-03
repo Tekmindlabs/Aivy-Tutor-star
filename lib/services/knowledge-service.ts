@@ -12,7 +12,7 @@ export class KnowledgeService {
         userId,
         contentType: 'document',
         contentId: document.id,
-        embedding,
+        embedding: Array.from(embedding), // Convert Float32Array to number[]
         metadata: {
           title: document.title,
           fileType: document.fileType,
@@ -29,7 +29,7 @@ export class KnowledgeService {
       const embedding = await getEmbedding(query);
       const results = await searchSimilarContent({
         userId,
-        embedding,
+        embedding: Array.from(embedding), // Convert Float32Array to number[]
         limit: 5,
         contentTypes: ['document', 'note', 'url']
       });
@@ -47,10 +47,10 @@ export class KnowledgeService {
         userId,
         contentType: 'note',
         contentId: note.id,
-        embedding,
+        embedding: Array.from(embedding), // Convert Float32Array to number[]
         metadata: {
           title: note.title,
-          tags: note.tags
+          tags: note.tags // Now properly typed
         }
       });
     } catch (error) {
@@ -65,7 +65,7 @@ export class KnowledgeService {
         userId,
         contentType: 'url',
         contentId: url.id,
-        embedding,
+        embedding: Array.from(embedding), // Convert Float32Array to number[]
         metadata: {
           url: url.url,
           title: url.title

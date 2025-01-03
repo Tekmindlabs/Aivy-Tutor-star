@@ -107,23 +107,25 @@ export async function POST(req: NextRequest) {
       // Generate embedding for the last message
       const lastMessage = processedMessages[processedMessages.length - 1];
       let processedTensors;
+
+
       try {
-        const { data, dimensions } = await EmbeddingModel.generateEmbedding(lastMessage.content);
-        
-        // Ensure proper tensor format
-        const embedding = Array.from(data);
-        
-        processedTensors = {
-          embedding: new Float32Array(embedding),
-          input_ids: new Float32Array(dimensions),
-          attention_mask: new Float32Array(dimensions).fill(1),
-          token_type_ids: new Float32Array(dimensions).fill(0)
-        };
+  const { data, dimensions } = await EmbeddingModel.generateEmbedding(lastMessage.content);
   
-      } catch (error) {
-        console.error("Embedding Error:", error);
-        throw new Error(`Embedding generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
+  // First convert the initial data to array
+  const embedding = Array.from(data);
+  
+  processedTensors = {
+    embedding: embedding, // Now it's number[]
+    input_ids: new Float32Array(dimensions),
+    attention_mask: new Float32Array(dimensions).fill(1),
+    token_type_ids: new Float32Array(dimensions).fill(0)
+  };
+
+} catch (error) {
+  console.error("Embedding Error:", error);
+  throw new Error(`Embedding generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+}
   
       // Create initial state with validated tensors
       const initialState: HybridState = {

@@ -12,15 +12,22 @@ class TensorConversionError extends Error {
 // Utility function for tensor conversion
 function convertToTypedArray(data: ArrayBuffer | ArrayLike<number>): Float32Array {
   try {
-    // Convert BigInt64Array to regular numbers first
-    if (data instanceof BigInt64Array) {
-      return new Float32Array(Array.from(data).map(Number));
+    // If data is ArrayBuffer, create a view first
+    if (data instanceof ArrayBuffer) {
+      return new Float32Array(data);
     }
+    
+    // If it's BigInt64Array, convert to numbers
+    if (data instanceof BigInt64Array) {
+      return new Float32Array(Array.from(data, Number));
+    }
+    
     // If already a typed array, convert to Float32Array
     if (ArrayBuffer.isView(data)) {
-      return new Float32Array(Array.from(data));
+      return new Float32Array(Array.from(data as any));
     }
-    // If regular array, convert directly
+    
+    // If regular array-like object, convert directly
     return new Float32Array(data);
   } catch (err) {
     const error = err instanceof Error ? err : new Error('Unknown error');
@@ -47,6 +54,9 @@ interface ProcessedTensor {
   token_type_ids: Float32Array;
 }
 
+interface ModelOutput {
+  data: Float32Array | ArrayBuffer | ArrayLike<number>;
+}
 
 export async function getEmbedding(text: string): Promise<Float32Array> {
   const { data } = await EmbeddingModel.generateEmbedding(text);
@@ -132,20 +142,10 @@ export class EmbeddingModel {
       const output = await model(text, {
         pooling: 'mean',
         normalize: true
-      });
-
-      // Ensure proper tensor conversion
-      let embedding: Float32Array;
-      
-      if (output.data instanceof Float32Array) {
-        embedding = output.data;
-      } else if (ArrayBuffer.isView(output.data)) {
-        embedding = new Float32Array(output.data);
-      } else if (Array.isArray(output.data)) {
-        embedding = new Float32Array(output.data);
-      } else {
-        throw new Error('Invalid tensor data format');
-      }
+      }) as ModelOutput;
+  
+      // Convert the output data to Float32Array using our utility function
+      const embedding = convertToTypedArray(output.data);
       
       return {
         data: embedding,
