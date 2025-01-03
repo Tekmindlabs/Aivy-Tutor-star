@@ -1,4 +1,3 @@
-import { Document } from './types';
 import { prisma } from '@/lib/prisma';
 import { getEmbedding } from './embeddings';
 import { insertVector } from '../milvus/vectors';

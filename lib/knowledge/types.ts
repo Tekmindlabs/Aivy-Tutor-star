@@ -17,6 +17,7 @@ export interface URL {
   url: string;
   title: string;
   content: string;
+  userId: string;
   lastAccessed: Date;
   createdAt: Date;
   updatedAt: Date;

@@ -13,11 +13,13 @@ export async function processURL(
     const content = extractContent(html);
     const title = extractTitle(html);
     
-    const embedding = await getEmbedding(content);
+    const embeddingArray = await getEmbedding(content);
+    // Convert Float32Array to regular number array
+    const embedding = Array.from(embeddingArray);
     console.log('URL content embedding generated:', embedding.length);
 
     // Create URL document
-    const urlDoc = await prisma.urls.create({
+    const urlDoc = await prisma.uRL.create({  // Note: Changed from urls to uRL
       data: {
         userId,
         url,

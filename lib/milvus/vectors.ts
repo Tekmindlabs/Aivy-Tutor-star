@@ -1,5 +1,6 @@
 import { getMilvusClient } from './client';
 import { v4 as uuidv4 } from 'uuid';
+import { VectorResult } from '../knowledge/types';
 
 // In /lib/milvus/vectors.ts
 export async function insertVector({
