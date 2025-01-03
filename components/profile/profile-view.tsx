@@ -6,15 +6,8 @@ import { InterestsEditForm } from "@/components/profile/interests-edit-form";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
-// Extend the User type to include additional properties
-interface ExtendedUser extends User {
-  phoneNumber?: string | null;
-  age?: number | null;
-  interests?: string[];
-}
-
 interface ProfileViewProps {
-  user: ExtendedUser;
+  user: UserProfile;
 }
 
 export function ProfileView({ user }: ProfileViewProps) {
@@ -52,6 +45,18 @@ export function ProfileView({ user }: ProfileViewProps) {
             <div>
               <h3 className="font-medium">Age</h3>
               <p>{user.age?.toString() || "Not set"}</p>
+            </div>
+            <div>
+              <h3 className="font-medium">Education Level</h3>
+              <p>{user.educationLevel || "Not set"}</p>
+            </div>
+            <div>
+              <h3 className="font-medium">Learning Style</h3>
+              <p>{user.learningStyle || "Not set"}</p>
+            </div>
+            <div>
+              <h3 className="font-medium">Difficulty Preference</h3>
+              <p>{user.difficultyPreference || "Not set"}</p>
             </div>
           </div>
           <div>

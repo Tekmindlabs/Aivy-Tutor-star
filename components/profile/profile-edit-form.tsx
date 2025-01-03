@@ -34,7 +34,7 @@ interface ExtendedUser extends User {
 }
 
 interface ProfileEditFormProps {
-  user: ExtendedUser;
+  user: UserProfile;
   onComplete: () => void;
 }
 
