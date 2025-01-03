@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
         id: runId,
         role: 'assistant',
         content: finalResponse,
-        createdAt: new Date().toISOString()
+        createdAt: new Date()
       };;
       
       // Convert for AI handler

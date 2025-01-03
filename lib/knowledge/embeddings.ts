@@ -49,11 +49,15 @@ export class EmbeddingModel {
         const options = {
           revision: 'main',
           quantized: false,
-          executionProviders: ['cpu'] as const,
+          executionProviders: ['cpu', 'webgl'] as const,
           graphOptimizationLevel: 'all' as const
         };
 
-        const model = await pipeline('feature-extraction', 'Xenova/gte-base', options);
+        const model = await pipeline('feature-extraction', 'Xenova/gte-base', {
+          ...options,
+          pooling: 'mean',
+          normalize: true,
+        });
 
         if (!model) {
           throw new ModelLoadError('Failed to initialize embedding model');
@@ -85,12 +89,7 @@ export class EmbeddingModel {
       const processedText = text.trim();
 
       // Generate embedding with specific options
-      const output = await model(processedText, {
-        pooling: 'mean',
-        normalize: true,
-        max_length: 512,
-        return_tensors: true
-      });
+      const output = await model(processedText, 'mean', true);
 
       // Convert output to Float32Array
       if (!output || !output.data) {
