@@ -7,7 +7,7 @@ import { createHybridAgent, HybridState } from '@/lib/ai/hybrid-agent'; // Added
 import { AgentState, ReActStep, EmotionalState } from '@/lib/ai/agents';
 import { Message } from '@/types/chat';
 import { MemoryService } from '@/lib/memory/memory-service';
-import { getEmbedding } from "@/lib/knowledge/embeddings";
+import { EmbeddingModel } from '@/lib/knowledge/embeddings';
 
 // Type definitions
 interface SuccessResponse {
