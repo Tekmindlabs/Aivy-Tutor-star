@@ -23,15 +23,6 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
 
-interface ExtendedUser extends User {
-  phoneNumber?: string;
-  age?: number;
-  interests?: string[];
-  educationLevel?: string;
-  preferredLanguage?: string;
-  learningStyle?: string;
-  difficultyPreference?: string;
-}
 
 interface ProfileEditFormProps {
   user: UserProfile;
@@ -85,11 +76,17 @@ export function ProfileEditForm({ user, onComplete }: ProfileEditFormProps) {
       });
       
       onComplete();
-    } catch (error) {
+    } catch (error: unknown) { // Explicitly type the error as unknown
       console.error("Profile update error:", error);
+      
+      // Proper error type checking
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Failed to update profile. Please try again.";
+      
       toast({
         title: "Error",
-        description: error.message || "Failed to update profile. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     }

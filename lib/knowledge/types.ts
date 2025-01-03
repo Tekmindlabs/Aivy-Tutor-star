@@ -1,12 +1,14 @@
-export interface Document {
+interface Document {
   id: string;
   title: string;
   content: string;
-  fileType: string;
+  userId: string;
+  vectorId: string | null;
   metadata: Record<string, any>;
   version: number;
   createdAt: Date;
   updatedAt: Date;
+  fileType: string; // This is now extracted from metadata
 }
 
 export interface URL {
