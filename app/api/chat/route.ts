@@ -10,7 +10,7 @@ import { Message } from '@/types/chat';
 import { MemoryService } from '@/lib/memory/memory-service';
 import { EmbeddingModel } from '@/lib/knowledge/embeddings';
 
-// Type definitions remain the same
+// Type definitions
 interface SuccessResponse {
   success: true;
   emotionalState: EmotionalState;
@@ -64,17 +64,19 @@ if (!process.env.GOOGLE_AI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
 
+// Request deduplication using Map instead of Cache API
+const requestCache = new Map<string, Response>();
+
 export async function POST(req: NextRequest) {
   const runId = crypto.randomUUID();
   let currentStep = STEPS.INIT;
   
-  // Add request deduplication
+  // Deduplication check using Map
   const requestId = req.headers.get('x-request-id') || runId;
-  const cache = await caches.open('chat-requests');
-  const existing = await cache.match(requestId);
+  const cachedResponse = requestCache.get(requestId);
   
-  if (existing) {
-    return existing;
+  if (cachedResponse) {
+    return cachedResponse;
   }
   
   try {
@@ -168,7 +170,7 @@ export async function POST(req: NextRequest) {
       throw new Error(response.error || "Processing failed");
     }
 
-    // Parallel operations for better performance
+    // Parallel operations
     currentStep = STEPS.RESPONSE;
     const [personalizedResponse, memoryResult] = await Promise.all([
       model.generateContent({
@@ -201,7 +203,7 @@ export async function POST(req: NextRequest) {
     const finalResponse = personalizedResponse.response.text();
 
     // Store chat in database without blocking
-    const dbOperation = prisma.chat.create({
+    prisma.chat.create({
       data: {
         userId: user.id,
         message: lastMessage.content,
@@ -221,24 +223,32 @@ export async function POST(req: NextRequest) {
           }
         } as ChatMetadata,
       },
-    }).catch(dbError => {
+    }).catch((dbError: Error) => {
       console.error("Error saving chat to database:", dbError);
     });
 
     // Stream response
     currentStep = STEPS.STREAM;
     try {
-      const messageData = {
+      const messageData: Message = {
         id: runId,
-        role: 'assistant' as const,
+        role: 'assistant',
         content: finalResponse,
         createdAt: new Date().toISOString()
       };
-
+      
+      // Convert for AI handler
+      const aiMessage = {
+        ...messageData,
+        createdAt: new Date() // Convert to Date object for AI handler
+      };
+      
       await handlers.handleLLMNewToken(finalResponse);
-      await handlers.handleLLMEnd(messageData, runId);
+      await handlers.handleLLMEnd(aiMessage, runId);
 
-      return new StreamingTextResponse(stream);
+      const streamResponse = new StreamingTextResponse(stream);
+      requestCache.set(requestId, streamResponse.clone());
+      return streamResponse;
     } catch (streamError) {
       console.error("Streaming error:", streamError);
       throw new Error("Failed to stream response");
