@@ -25,7 +25,8 @@ interface ChatMessageProps {
 
 interface CodeProps {
   className?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
+  [key: string]: any; // Allow for additional props
 }
 
 export function ChatMessage({ message, isLoading }: ChatMessageProps) {
@@ -90,7 +91,7 @@ export function ChatMessage({ message, isLoading }: ChatMessageProps) {
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeHighlight]}
               components={{
-                code: ({ className, children }: CodeProps) => {
+                code: ({ className, children, ...props }: CodeProps) => {
                   const isInline = !className;
                   return (
                     <code
@@ -98,6 +99,7 @@ export function ChatMessage({ message, isLoading }: ChatMessageProps) {
                         "bg-secondary/50 rounded px-1.5 py-0.5",
                         isInline ? "text-sm" : "block p-4 text-sm"
                       )}
+                      {...props}
                     >
                       {children}
                     </code>
