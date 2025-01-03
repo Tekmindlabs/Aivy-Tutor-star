@@ -47,6 +47,12 @@ interface ProcessedTensor {
   token_type_ids: Float32Array;
 }
 
+
+export async function getEmbedding(text: string): Promise<Float32Array> {
+  const { data } = await EmbeddingModel.generateEmbedding(text);
+  return data;
+}
+
 export class EmbeddingModel {
   private static instance: FeatureExtractionPipeline | null = null;
   private static isLoading: boolean = false;
@@ -96,10 +102,18 @@ export class EmbeddingModel {
 
   static async processTensorInput(input: TensorInput): Promise<ProcessedTensor> {
     try {
+      // Convert BigInt64Array to Float32Array
+      const convertInput = (data: ArrayLike<number>) => {
+        if (data instanceof BigInt64Array) {
+          return new Float32Array(Array.from(data).map(Number));
+        }
+        return new Float32Array(Array.from(data));
+      };
+  
       return {
-        input_ids: convertToTypedArray(Array.from(input.input_ids.cpuData)),
-        attention_mask: convertToTypedArray(Array.from(input.attention_mask.cpuData)),
-        token_type_ids: convertToTypedArray(Array.from(input.token_type_ids.cpuData))
+        input_ids: convertInput(input.input_ids.cpuData),
+        attention_mask: convertInput(input.attention_mask.cpuData),
+        token_type_ids: convertInput(input.token_type_ids.cpuData)
       };
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Unknown error');
@@ -119,8 +133,11 @@ export class EmbeddingModel {
         pooling: 'mean',
         normalize: true
       });
-
-      const embedding = convertToTypedArray(output.data);
+  
+      // Ensure output is converted to Float32Array
+      const embedding = output.data instanceof Float32Array 
+        ? output.data 
+        : new Float32Array(Array.from(output.data).map(Number));
       
       return {
         data: embedding,

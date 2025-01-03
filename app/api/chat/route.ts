@@ -109,12 +109,17 @@ export async function POST(req: NextRequest) {
 let processedTensors;
 try {
   const { data, dimensions } = await EmbeddingModel.generateEmbedding(lastMessage.content);
-  processedTensors = await EmbeddingModel.processTensorInput({
-    input_ids: { cpuData: data },
-    attention_mask: { cpuData: new Float32Array(dimensions).fill(1) },
-    token_type_ids: { cpuData: new Float32Array(dimensions).fill(0) }
-  });
-  processedTensors.embedding = Array.from(data);
+  
+  // Convert BigInt64Array to Float32Array
+  const convertedData = Array.from(data).map(Number);
+  
+  processedTensors = {
+    embedding: convertedData,
+    input_ids: new Float32Array(convertedData),
+    attention_mask: new Float32Array(dimensions).fill(1),
+    token_type_ids: new Float32Array(dimensions).fill(0)
+  };
+
 } catch (error) {
   console.error("Error:", error instanceof Error ? error.message : String(error));
   throw new Error(`Embedding generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
