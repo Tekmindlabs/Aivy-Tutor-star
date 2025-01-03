@@ -108,6 +108,9 @@ export async function POST(req: NextRequest) {
         difficultyPreference: true,
         interests: true
       }
+    }).catch(error => {
+      console.error("Prisma query error:", error);
+      throw new Error("Database query failed");
     });
 
     if (!user) {
@@ -235,7 +238,7 @@ export async function POST(req: NextRequest) {
         role: 'assistant',
         content: finalResponse,
         createdAt: new Date().toISOString()
-      };
+      };;
       
       // Convert for AI handler
       const aiMessage = {

@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
-import { auth } from "@/auth";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { processDocument } from "@/lib/knowledge/document-processor";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
+    const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return new Response("Unauthorized", { status: 401 });
     }
