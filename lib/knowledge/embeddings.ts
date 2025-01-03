@@ -1,5 +1,19 @@
 import { pipeline, Pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
 
+// Type definition for TypedArray
+type TypedArray =
+  | Int8Array
+  | Uint8Array
+  | Uint8ClampedArray
+  | Int16Array
+  | Uint16Array
+  | Int32Array
+  | Uint32Array
+  | Float32Array
+  | Float64Array
+  | BigInt64Array
+  | BigUint64Array;
+  
 declare global {
   var env: {
     useLegacyWebImplementation: boolean | undefined;
@@ -57,8 +71,6 @@ export class EmbeddingModel {
 
         const model = await pipeline('feature-extraction', 'Xenova/gte-base-en-v1.5', {
           ...options,
-          pooling: 'mean',
-          normalize: true,
         });
 
         if (!model) {
@@ -79,7 +91,7 @@ export class EmbeddingModel {
     return this.loadingPromise;
   }
 
-  static async generateEmbedding(text: string): Promise<Float32Array> {
+  static async generateEmbedding(text: string, max_length?: number): Promise<Float32Array> {
     if (!text || typeof text !== 'string') {
       throw new Error('Invalid input: text must be a non-empty string');
     }
@@ -90,9 +102,8 @@ export class EmbeddingModel {
   
       // Generate embedding with specific options matching GTE requirements
       const output = await model(processedText, {
-        pooling: 'mean',
         normalize: true,
-        max_length: 8192 // GTE's max sequence length
+        pooling: 'mean',
       });
   
       // Improved tensor data handling
@@ -124,21 +135,8 @@ export class EmbeddingModel {
     }
   }
 
-// Type definition for TypedArray
-type TypedArray =
-  | Int8Array
-  | Uint8Array
-  | Uint8ClampedArray
-  | Int16Array
-  | Uint16Array
-  | Int32Array
-  | Uint32Array
-  | Float32Array
-  | Float64Array
-  | BigInt64Array
-  | BigUint64Array;
-
 // Public function to get embeddings
-export async function getEmbedding(text: string): Promise<Float32Array> {
-  return await EmbeddingModel.generateEmbedding(text);
+export async function getEmbedding(text: string, options?: { max_length?: number }): Promise<Float32Array> {
+  return await EmbeddingModel.generateEmbedding(text, options?.max_length);
+}
 }
