@@ -55,7 +55,7 @@ export class EmbeddingModel {
           useCache: true
         };
 
-        const model = await pipeline('feature-extraction', 'Xenova/gte-base', {
+        const model = await pipeline('feature-extraction', 'Xenova/gte-base-en-v1.5', {
           ...options,
           pooling: 'mean',
           normalize: true,
@@ -83,25 +83,24 @@ export class EmbeddingModel {
     if (!text || typeof text !== 'string') {
       throw new Error('Invalid input: text must be a non-empty string');
     }
-
+  
     try {
       const model = await this.getInstance();
-
-      // Pre-process text
       const processedText = text.trim();
-
-      // Generate embedding with specific options
+  
+      // Generate embedding with specific options matching GTE requirements
       const output = await model(processedText, {
         pooling: 'mean',
-        normalize: true
+        normalize: true,
+        max_length: 8192 // GTE's max sequence length
       });
-
-      // Convert output to Float32Array
+  
+      // Improved tensor data handling
       if (!output || !output.data) {
         throw new TensorConversionError('Invalid model output');
       }
-
-      // Ensure output is Float32Array
+  
+      // Ensure proper conversion to Float32Array
       let embedding: Float32Array;
       if (output.data instanceof Float32Array) {
         embedding = output.data;
@@ -112,14 +111,18 @@ export class EmbeddingModel {
       } else {
         throw new TensorConversionError('Unexpected output format from model');
       }
-
+  
+      // Verify embedding dimension (should be 768 for gte-base)
+      if (embedding.length !== 768) {
+        throw new Error(`Invalid embedding dimension: ${embedding.length}, expected 768`);
+      }
+  
       return embedding;
     } catch (error) {
       console.error('Error generating embedding:', error);
       throw error instanceof Error ? error : new Error('Unknown error during embedding generation');
     }
   }
-}
 
 // Type definition for TypedArray
 type TypedArray =

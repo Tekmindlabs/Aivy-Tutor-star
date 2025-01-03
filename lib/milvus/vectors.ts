@@ -17,6 +17,12 @@ export async function insertVector({
   metadata?: Record<string, any>;
 }): Promise<VectorResult> {
   const client = await getMilvusClient();
+  
+  // Verify embedding dimension
+  if (embedding.length !== 768) {
+    throw new Error('Invalid embedding dimension');
+  }
+
   const vectorId = uuidv4();
   
   await client.insert({
@@ -26,7 +32,7 @@ export async function insertVector({
       user_id: userId,
       content_type: contentType,
       content_id: contentId,
-      embedding,
+      embedding: embedding,
       metadata: JSON.stringify(metadata)
     }]
   });
@@ -59,7 +65,10 @@ export async function searchSimilarContent({
     filter: `user_id == "${userId}" && content_type in ${JSON.stringify(contentTypes)}`,
     limit,
     output_fields: ['content_type', 'content_id', 'metadata'],
-    params: { nprobe: 10 }
+    params: { 
+      nprobe: 10,
+      metric_type: 'L2' // or 'COSINE' depending on your needs
+    }
   });
 
   return results;
