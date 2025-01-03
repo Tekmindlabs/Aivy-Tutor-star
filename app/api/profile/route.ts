@@ -12,13 +12,23 @@ export async function PUT(req: Request) {
 
     const data = await req.json();
     
-    // Add validation
-    if (!data.name) {
-      return new Response(JSON.stringify({ error: "Name is required" }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    // Validate the data using the schema
+    const validationResult = userDetailsSchema.safeParse(data);
+    
+    if (!validationResult.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Validation failed", 
+          details: validationResult.error.errors 
+        }), 
+        { 
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     }
+
+    const validatedData = validationResult.data;
 
     // Log the data before update
     console.log("Updating user with data:", validatedData);
@@ -31,11 +41,15 @@ export async function PUT(req: Request) {
     return new Response(JSON.stringify(updatedUser), {
       headers: { 'Content-Type': 'application/json' },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Detailed profile update error:", error);
+    
+    // Type guard for error handling
+    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    
     return new Response(JSON.stringify({ 
       error: "Error updating profile",
-      details: error.message 
+      details: errorMessage 
     }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' },
