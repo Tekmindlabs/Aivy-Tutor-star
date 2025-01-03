@@ -65,12 +65,12 @@ export async function POST(req: NextRequest) {
     }
 
     const { messages }: { messages: Message[] } = await req.json();
-if (!messages?.length || !messages[messages.length - 1]?.content) {
-  return new Response(
-    JSON.stringify({ error: "Invalid message format - content is required" }), 
-    { status: 400 }
-  );
-}
+    if (!messages?.length || !messages[messages.length - 1]?.content) {
+      return new Response(
+        JSON.stringify({ error: "Invalid message format - content is required" }), 
+        { status: 400 }
+      );
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -88,55 +88,58 @@ if (!messages?.length || !messages[messages.length - 1]?.content) {
         { status: 404 }
       );
     }
-    
+
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
     const { stream, handlers } = LangChainStream({
       experimental_streamData: true
     });
-    
+
     try {
       const memoryService = new MemoryService();
       const hybridAgent = createHybridAgent(model, memoryService);
-      
-      // Add tensor processing here, before creating initialState
+
+      // Clean and process messages
+      const processedMessages = messages.map(msg => ({
+        ...msg,
+        content: msg.content.trim()
+      }));
+
+      // Generate embedding for the last message
+      const lastMessage = processedMessages[processedMessages.length - 1];
       let processedTensors;
       try {
-        const inputTensors = {
-          input_ids: messages[messages.length - 1].content,
-          attention_mask: new Float32Array(messages[messages.length - 1].content.length).fill(1),
-          token_type_ids: new Float32Array(messages[messages.length - 1].content.length).fill(0)
+        const embedding = await getEmbedding(lastMessage.content);
+        processedTensors = {
+          embedding,
+          input_ids: new Float32Array(embedding),
+          attention_mask: new Float32Array(embedding.length).fill(1),
+          token_type_ids: new Float32Array(embedding.length).fill(0)
         };
-      
-        processedTensors = await EmbeddingModel.processTensorInput(inputTensors);
-      } catch (error: unknown) {
+      } catch (error) {
         console.error("Error processing tensors:", error);
-        if (error instanceof Error) {
-          throw new Error(`Tensor processing failed: ${error.message}`);
-        } else {
-          throw new Error('Tensor processing failed: Unknown error');
-        }
+        throw new Error(`Tensor processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
 
-      // Update initialState to include processed tensors
+      // Create initial state for hybrid agent
       const initialState: HybridState = {
         userId: user.id,
-        messages: messages,
+        messages: processedMessages,
         currentStep: "initial",
-        emotionalState: { 
-          mood: "neutral", 
-          confidence: "medium" 
-        } as EmotionalState,
+        emotionalState: {
+          mood: "neutral",
+          confidence: "medium"
+        },
         context: {
           role: "tutor",
           analysis: {},
           recommendations: ""
         },
-        reactSteps: [] as ReActStep[],
-        processedTensors // Add processed tensors to state
+        reactSteps: [],
+        processedTensors
       };
-    
-      // Use the processed tensors in hybrid agent
-      const response = await hybridAgent.process(initialState) as AgentResponse;
+
+      // Process with hybrid agent
+      const response = await hybridAgent.process(initialState);
 
       if (!response.success) {
         throw new Error(response.error || "Processing failed");
@@ -144,7 +147,7 @@ if (!messages?.length || !messages[messages.length - 1]?.content) {
 
       // Store interaction in memory
       await memoryService.addMemory(
-        messages,
+        processedMessages,
         user.id,
         {
           emotionalState: response.emotionalState,
@@ -154,6 +157,7 @@ if (!messages?.length || !messages[messages.length - 1]?.content) {
         }
       );
 
+      // Generate personalized response
       const prompt = {
         contents: [{
           role: 'user',
@@ -174,11 +178,12 @@ if (!messages?.length || !messages[messages.length - 1]?.content) {
       const personalizedResponse = await model.generateContent(prompt);
       const finalResponse = personalizedResponse.response.text();
 
+      // Store chat in database
       try {
         await prisma.chat.create({
           data: {
             userId: user.id,
-            message: messages[messages.length - 1].content,
+            message: lastMessage.content,
             response: finalResponse,
             metadata: {
               emotionalState: response.emotionalState || null,
@@ -200,40 +205,46 @@ if (!messages?.length || !messages[messages.length - 1]?.content) {
         console.error("Error saving chat to database:", dbError);
       }
 
+      // Stream response
       const messageData = {
         id: runId,
         role: 'assistant' as const,
         content: finalResponse,
         createdAt: new Date().toISOString()
       };
-      
+
       await handlers.handleLLMNewToken(finalResponse);
-      // Pass both messageData and runId
       await handlers.handleLLMEnd(messageData, runId);
-      
+
       return new StreamingTextResponse(stream);
 
     } catch (error) {
       console.error("Error in chat processing:", error);
-      return new Response(JSON.stringify({ 
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-        details: "Failed during tensor processing or agent execution"
-      }), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+          details: "Failed during tensor processing or agent execution"
+        }),
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
 
   } catch (error) {
     console.error("Error in request processing:", error);
-    return new Response(JSON.stringify({ 
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-      details: "Failed during request processing"
-    }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        details: "Failed during request processing"
+      }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   }
 }

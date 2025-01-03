@@ -4,6 +4,15 @@ import { searchSimilarContent } from '../milvus/vectors';
 // Utility function for tensor conversion
 function convertToTypedArray(data: any[]): Float32Array {
   try {
+    // Convert BigInt64Array to regular numbers first
+    if (data instanceof BigInt64Array) {
+      return new Float32Array(Array.from(data).map(Number));
+    }
+    // If already a typed array, convert to Float32Array
+    if (ArrayBuffer.isView(data)) {
+      return new Float32Array(Array.from(data));
+    }
+    // If regular array, convert directly
     return new Float32Array(data);
   } catch (error) {
     console.error('Error converting tensor data:', error);
@@ -69,12 +78,17 @@ class EmbeddingModel {
   }
 
   static async processTensorInput(input: any) {
-    const tensor = {
-      input_ids: convertToTypedArray(input.input_ids.cpuData),
-      attention_mask: convertToTypedArray(input.attention_mask.cpuData),
-      token_type_ids: convertToTypedArray(input.token_type_ids.cpuData)
-    };
-    return tensor;
+    try {
+      const tensor = {
+        input_ids: convertToTypedArray(Array.from(input.input_ids.cpuData)),
+        attention_mask: convertToTypedArray(Array.from(input.attention_mask.cpuData)),
+        token_type_ids: convertToTypedArray(Array.from(input.token_type_ids.cpuData))
+      };
+      return tensor;
+    } catch (error) {
+      console.error('Error processing tensor input:', error);
+      throw new Error('Failed to process tensor input');
+    }
   }
 }
 
@@ -91,10 +105,15 @@ export async function getEmbedding(text: string): Promise<number[]> {
 
     const output = await model(text, {
       pooling: 'mean',
-      normalize: true
+      normalize: true,
+      convertToTensor: true // Add this option
     }) as EmbeddingOutput;
 
-    return Array.from(output.data);
+    // Ensure output.data is converted to regular array
+    if (output.data instanceof Float32Array) {
+      return Array.from(output.data);
+    }
+    return Array.from(convertToTypedArray(output.data));
   } catch (error) {
     console.error('Error generating embedding:', error);
     throw error;
