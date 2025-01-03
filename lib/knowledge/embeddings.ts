@@ -1,7 +1,18 @@
 import { pipeline, Pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
-import { searchSimilarContent } from '../milvus/vectors';
 
-// Custom error type
+declare global {
+  var env: {
+    useLegacyWebImplementation: boolean | undefined;
+  };
+}
+
+// Set environment to use legacy build
+globalThis.env = {
+  ...globalThis.env,
+  useLegacyWebImplementation: true,
+};
+
+// Custom error types
 class TensorConversionError extends Error {
   constructor(message: string) {
     super(message);
@@ -9,72 +20,11 @@ class TensorConversionError extends Error {
   }
 }
 
-// Updated tensor conversion utility with proper type handling
-function convertToTypedArray(data: unknown): Float32Array {
-  try {
-    // Handle direct Float32Array
-    if (data instanceof Float32Array) {
-      return data;
-    }
-
-    // Handle tensor-like objects with cpuData property
-    if (data && typeof data === 'object' && 'cpuData' in data) {
-      const cpuData = data.cpuData;
-      
-      // Handle BigInt64Array
-      if (cpuData instanceof BigInt64Array) {
-        return new Float32Array(Array.from(cpuData).map(Number));
-      }
-      
-      // Handle TypedArrays
-      if (ArrayBuffer.isView(cpuData)) {
-        return new Float32Array(Array.from(cpuData));
-      }
-      
-      // Handle array-like objects
-      if (Array.isArray(cpuData)) {
-        return new Float32Array(cpuData);
-      }
-    }
-
-    // Handle direct BigInt64Array
-    if (data instanceof BigInt64Array) {
-      return new Float32Array(Array.from(data).map(Number));
-    }
-
-    // Handle ArrayBuffer
-    if (data instanceof ArrayBuffer) {
-      return new Float32Array(data);
-    }
-
-    // Handle arrays
-    if (Array.isArray(data)) {
-      return new Float32Array(data);
-    }
-
-    throw new TensorConversionError('Unsupported data type for tensor conversion');
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error('Tensor conversion error:', error.message);
-      throw new TensorConversionError(`Failed to convert tensor data: ${error.message}`);
-    }
-    throw new TensorConversionError('Unknown error during tensor conversion');
+class ModelLoadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ModelLoadError';
   }
-}
-
-// Define interfaces
-export interface EmbeddingOutput {
-  data: Float32Array;
-  dimensions: number;
-}
-
-interface ModelOutput {
-  data: Float32Array | ArrayBuffer | ArrayLike<number>;
-}
-
-export async function getEmbedding(text: string): Promise<Float32Array> {
-  const { data } = await EmbeddingModel.generateEmbedding(text);
-  return data;
 }
 
 export class EmbeddingModel {
@@ -95,7 +45,7 @@ export class EmbeddingModel {
     this.loadingPromise = (async () => {
       try {
         console.log('Loading GTE-Base model...');
-        
+
         const options = {
           revision: 'main',
           quantized: false,
@@ -104,19 +54,16 @@ export class EmbeddingModel {
         };
 
         const model = await pipeline('feature-extraction', 'Xenova/gte-base', options);
-        
+
         if (!model) {
-          throw new Error('Failed to initialize embedding model');
+          throw new ModelLoadError('Failed to initialize embedding model');
         }
 
         this.instance = model;
         return this.instance;
       } catch (error) {
-        if (error instanceof Error) {
-          console.error('Error loading model:', error.message);
-          throw new Error(`Model initialization failed: ${error.message}`);
-        }
-        throw new Error('Unknown error during model initialization');
+        console.error('Error loading model:', error);
+        throw new ModelLoadError(`Model initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       } finally {
         this.isLoading = false;
         this.loadingPromise = null;
@@ -126,63 +73,70 @@ export class EmbeddingModel {
     return this.loadingPromise;
   }
 
-  static async generateEmbedding(text: string): Promise<EmbeddingOutput> {
+  static async generateEmbedding(text: string): Promise<Float32Array> {
     if (!text || typeof text !== 'string') {
       throw new Error('Invalid input: text must be a non-empty string');
     }
 
     try {
       const model = await this.getInstance();
-      
+
       // Pre-process text
       const processedText = text.trim();
-      
+
       // Generate embedding with specific options
       const output = await model(processedText, {
         pooling: 'mean',
         normalize: true,
-        padding: true,
-        truncation: true,
-        max_length: 512
+        max_length: 512,
+        return_tensors: true
       });
 
       // Convert output to Float32Array
-      const embedding = convertToTypedArray(output.data || output);
-      
-      return {
-        data: embedding,
-        dimensions: embedding.length
-      };
-    } catch (error) {
-      if (error instanceof Error) {
-        console.error('Error generating embedding:', error.message);
-        throw new Error(`Embedding generation failed: ${error.message}`);
+      if (!output || !output.data) {
+        throw new TensorConversionError('Invalid model output');
       }
-      throw new Error('Unknown error during embedding generation');
+
+      // Handle different output types
+      let embedding: Float32Array;
+      if (output.data instanceof Float32Array) {
+        embedding = output.data;
+      } else if (ArrayBuffer.isView(output.data)) {
+        // Convert TypedArray to Float32Array
+        const typedArray = output.data as TypedArray;
+        embedding = new Float32Array(typedArray.length);
+        for (let i = 0; i < typedArray.length; i++) {
+          embedding[i] = Number(typedArray[i]);
+        }
+      } else if (Array.isArray(output.data)) {
+        embedding = new Float32Array(output.data.map(Number));
+      } else {
+        throw new TensorConversionError('Unexpected output format from model');
+      }
+
+      return embedding;
+    } catch (error) {
+      console.error('Error generating embedding:', error);
+      throw error instanceof Error ? error : new Error('Unknown error during embedding generation');
     }
   }
 }
 
-// Semantic search function
-export async function semanticSearch(
-  query: string,
-  userId: string,
-  limit: number = 5
-): Promise<any[]> {
-  try {
-    const { data } = await EmbeddingModel.generateEmbedding(query);
-    
-    return await searchSimilarContent({
-      userId,
-      embedding: Array.from(data),
-      limit,
-      contentTypes: ['document', 'note', 'url']
-    });
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error('Error in semantic search:', error.message);
-      throw new Error(`Semantic search failed: ${error.message}`);
-    }
-    throw new Error('Unknown error during semantic search');
-  }
+// Type definition for TypedArray
+type TypedArray =
+  | Int8Array
+  | Uint8Array
+  | Uint8ClampedArray
+  | Int16Array
+  | Uint16Array
+  | Int32Array
+  | Uint32Array
+  | Float32Array
+  | Float64Array
+  | BigInt64Array
+  | BigUint64Array;
+
+// Public function to get embeddings
+export async function getEmbedding(text: string): Promise<Float32Array> {
+  return await EmbeddingModel.generateEmbedding(text);
 }
