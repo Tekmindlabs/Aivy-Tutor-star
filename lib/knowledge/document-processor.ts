@@ -6,6 +6,7 @@ import { createRelationship } from '../milvus/knowledge-graph';
 import { searchSimilarContent } from '../milvus/vectors';
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
+import { Document, VectorResult } from './types';
 
 // Supported file types
 const SUPPORTED_FILE_TYPES = {
@@ -42,6 +43,7 @@ export async function processDocument(
         userId,
         title: file.name,
         content,
+        fileType: file.type,
         metadata: JSON.stringify({
           size: file.size,
           lastModified: file.lastModified,
@@ -62,7 +64,7 @@ export async function processDocument(
         title: file.name,
         fileType: file.type
       }
-    });
+    }) as VectorResult;
 
     // Update document with vector ID
     const updatedDocument = await prisma.document.update({
@@ -80,8 +82,10 @@ export async function processDocument(
       content: updatedDocument.content,
       userId: updatedDocument.userId,
       vectorId: updatedDocument.vectorId,
-      fileType: JSON.parse(updatedDocument.metadata).fileType,
-      metadata: JSON.parse(updatedDocument.metadata),
+      fileType: file.type, // Use the original file type
+      metadata: typeof updatedDocument.metadata === 'string' 
+        ? JSON.parse(updatedDocument.metadata) 
+        : updatedDocument.metadata,
       version: updatedDocument.version,
       createdAt: updatedDocument.createdAt,
       updatedAt: updatedDocument.updatedAt

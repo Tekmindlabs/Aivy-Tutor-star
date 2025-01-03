@@ -1,6 +1,7 @@
 import { getMilvusClient } from './client';
 import { v4 as uuidv4 } from 'uuid';
 
+// In /lib/milvus/vectors.ts
 export async function insertVector({
   userId,
   contentType,
@@ -13,13 +14,14 @@ export async function insertVector({
   contentId: string;
   embedding: number[];
   metadata?: Record<string, any>;
-}) {
+}): Promise<VectorResult> {
   const client = await getMilvusClient();
+  const vectorId = uuidv4();
   
   await client.insert({
     collection_name: 'content_vectors',
     data: [{
-      id: uuidv4(),
+      id: vectorId,
       user_id: userId,
       content_type: contentType,
       content_id: contentId,
@@ -27,6 +29,14 @@ export async function insertVector({
       metadata: JSON.stringify(metadata)
     }]
   });
+
+  return {
+    id: vectorId,
+    user_id: userId,
+    content_type: contentType,
+    content_id: contentId,
+    metadata: JSON.stringify(metadata)
+  };
 }
 
 export async function searchSimilarContent({

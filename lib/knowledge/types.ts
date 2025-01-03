@@ -59,3 +59,10 @@ export interface SharedContent {
   createdAt: Date;
   updatedAt: Date;
 }
+export interface VectorResult {
+  id: string;
+  user_id: string;
+  content_type: string;
+  content_id: string;
+  metadata: string;
+}
