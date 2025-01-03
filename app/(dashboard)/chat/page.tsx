@@ -88,64 +88,113 @@ export default function ChatPage() {
     }
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (isSubmitting || !input.trim() || input.length < 2) return;
 
-    const newMessage: ValidatedMessage = {
-      role: 'user',
-      content: input.trim(),
-      id: crypto.randomUUID(),
-      createdAt: new Date() // Create a Date object instead of string
-    };
 
-    if (!validateMessage(newMessage)) {
+const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  setIsSubmitting(true);
+  
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000;
+
+  const trySubmit = async (attempt: number) => {
+    try {
+      // Save current messages state
+      const currentMessages = [...messages];
+      
+      // Add optimistic message
+      const newMessage = {
+        id: crypto.randomUUID(),
+        content: input,
+        role: 'user' as const,
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages(prev => [...prev, newMessage]);
+      setInput('');
+
+      // Make API call with proper error handling
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [...currentMessages, newMessage],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(JSON.stringify(errorData));
+      }
+
+      // Handle successful response
+      const data = response.body;
+      if (!data) {
+        throw new Error('No response data');
+      }
+
+      // Process the stream
+      const reader = data.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        const chunkValue = decoder.decode(value);
+        if (chunkValue) {
+          setMessages(prev => {
+            const lastMessage = prev[prev.length - 1];
+            if (lastMessage.role === 'assistant') {
+              return [
+                ...prev.slice(0, -1),
+                { ...lastMessage, content: lastMessage.content + chunkValue }
+              ];
+            }
+            return [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                content: chunkValue,
+                role: 'assistant' as const,
+                createdAt: new Date().toISOString(),
+              }
+            ];
+          });
+        }
+      }
+
+      setIsSubmitting(false);
+
+    } catch (error) {
+      console.error(`Submit error (attempt ${attempt}):`, error);
+      
+      if (attempt < MAX_RETRIES) {
+        toast({
+          title: "Retrying...",
+          description: `Attempt ${attempt + 1} of ${MAX_RETRIES}`,
+          duration: 2000,
+        });
+        
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return trySubmit(attempt + 1);
+      }
+      
       toast({
         title: "Error",
-        description: "Invalid message format",
+        description: "Failed to send message. Please try again later.",
         variant: "destructive",
+        duration: 5000,
       });
-      return;
+      
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(true);
-    setRetryCount(0);
-
-    const trySubmit = async (attempt: number): Promise<void> => {
-      try {
-        // Add message to UI immediately
-        setMessages([...messages, newMessage]);
-        await originalHandleSubmit(e);
-      } catch (error) {
-        console.error(`Submit error (attempt ${attempt}):`, error);
-        
-        if (attempt < MAX_RETRIES) {
-          toast({
-            title: "Retrying...",
-            description: `Attempt ${attempt + 1} of ${MAX_RETRIES}`,
-            duration: 2000,
-          });
-          
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-          setRetryCount(attempt + 1);
-          return trySubmit(attempt + 1);
-        }
-        
-        // Remove message from UI if all retries failed
-        setMessages(messages);
-        toast({
-          title: "Error",
-          description: "Failed to send message after multiple attempts. Please try again later.",
-          variant: "destructive",
-          duration: 5000,
-        });
-        setIsSubmitting(false);
-      }
-    };
-
-    await trySubmit(0);
   };
+
+  await trySubmit(0);
+};
 
   useEffect(() => {
     const scrollContainer = document.getElementById('chat-container');

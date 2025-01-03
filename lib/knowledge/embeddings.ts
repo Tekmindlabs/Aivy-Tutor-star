@@ -133,11 +133,19 @@ export class EmbeddingModel {
         pooling: 'mean',
         normalize: true
       });
-  
-      // Ensure output is converted to Float32Array
-      const embedding = output.data instanceof Float32Array 
-        ? output.data 
-        : new Float32Array(Array.from(output.data).map(Number));
+
+      // Ensure proper tensor conversion
+      let embedding: Float32Array;
+      
+      if (output.data instanceof Float32Array) {
+        embedding = output.data;
+      } else if (ArrayBuffer.isView(output.data)) {
+        embedding = new Float32Array(output.data);
+      } else if (Array.isArray(output.data)) {
+        embedding = new Float32Array(output.data);
+      } else {
+        throw new Error('Invalid tensor data format');
+      }
       
       return {
         data: embedding,
