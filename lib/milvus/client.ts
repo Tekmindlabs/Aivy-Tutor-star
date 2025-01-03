@@ -4,14 +4,13 @@ const MILVUS_ADDRESS = process.env.MILVUS_ADDRESS || 'localhost:19530';
 const MILVUS_TOKEN = process.env.MILVUS_TOKEN;
 
 class MilvusConnection {
-  private static instance: MilvusClient;
+  private static instance: InstanceType<typeof MilvusClient>;
 
   private constructor() {}
 
-  public static async getInstance(): Promise<MilvusClient> {
+  public static async getInstance(): Promise<InstanceType<typeof MilvusClient>> {
     if (!MilvusConnection.instance) {
-      // Use the correct import from the SDK
-      MilvusConnection.instance = new (require('@zilliz/milvus2-sdk-node').MilvusClient)({
+      MilvusConnection.instance = new MilvusClient({
         address: MILVUS_ADDRESS,
         token: MILVUS_TOKEN
       });

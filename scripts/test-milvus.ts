@@ -1,3 +1,5 @@
+import { getMilvusClient } from '../lib/milvus/client';
+
 async function testConnection() {
     try {
       const client = await getMilvusClient();
@@ -9,6 +11,6 @@ async function testConnection() {
     } catch (error) {
       console.error('Failed to connect to Milvus:', error);
     }
-  }
+}
   
-  testConnection();
+testConnection();
