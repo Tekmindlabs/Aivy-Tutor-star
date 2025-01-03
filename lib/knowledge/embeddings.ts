@@ -112,7 +112,6 @@ export class EmbeddingModel {
 
   static async processTensorInput(input: TensorInput): Promise<ProcessedTensor> {
     try {
-      // Convert BigInt64Array to Float32Array
       const convertInput = (data: ArrayLike<number>) => {
         if (data instanceof BigInt64Array) {
           return new Float32Array(Array.from(data).map(Number));
@@ -142,9 +141,10 @@ export class EmbeddingModel {
       const output = await model(text, {
         pooling: 'mean',
         normalize: true
-      }) as ModelOutput;
+      });
   
-      // Convert the output data to Float32Array using our utility function
+      // The model output is already a Float32Array or similar
+      // No need to process it as a TensorInput
       const embedding = convertToTypedArray(output.data);
       
       return {
@@ -157,20 +157,19 @@ export class EmbeddingModel {
       throw new Error(`Embedding generation failed: ${error.message}`);
     }
   }
-}
 
-interface SearchParams {
-  userId: string;
-  embedding: number[];
-  limit?: number;
-  contentTypes?: string[];
-}
-
-export async function semanticSearch(
-  query: string,
-  userId: string,
-  limit: number = 5
-): Promise<any[]> {
+  interface SearchParams {
+    userId: string;
+    embedding: number[];
+    limit?: number;
+    contentTypes?: string[];
+  }
+  
+  export async function semanticSearch(
+    query: string,
+    userId: string,
+    limit: number = 5
+  ): Promise<any[]> {
   try {
     const { data } = await EmbeddingModel.generateEmbedding(query);
     
