@@ -57,10 +57,8 @@ export async function processDocument(
         throw new DocumentProcessingError('Invalid embedding format: expected Float32Array');
       }
 
-      // Convert to regular array for storage
       embedding = Array.from(embeddingFloat32);
       
-      // Validate embedding dimensions (GTE-base uses 768 dimensions)
       if (embedding.length !== 768) {
         throw new DocumentProcessingError(`Invalid embedding dimension: ${embedding.length}, expected 768`);
       }
@@ -78,15 +76,15 @@ export async function processDocument(
       data: {
         userId,
         title: file.name,
-        content: content.slice(0, 1000000), // Limit content size to prevent DB issues
+        content: content.slice(0, 1000000),
         fileType: file.type,
-        metadata: JSON.stringify({
+        metadata: {
           size: file.size,
           lastModified: file.lastModified,
           fileType: file.type,
           embeddingDimension: embedding.length,
           processingTimestamp: new Date().toISOString()
-        }),
+        },
         version: 1,
         vectorId: null
       },
@@ -104,7 +102,7 @@ export async function processDocument(
           fileType: file.type,
           documentId: document.id
         }
-      }) as VectorResult;
+      });
 
       // Update document with vector ID
       const updatedDocument = await prisma.document.update({
@@ -115,7 +113,6 @@ export async function processDocument(
       // Create relationships with error handling
       await createDocumentRelationships(document.id, content, userId).catch(error => {
         console.error('Warning: Failed to create relationships:', error);
-        // Don't throw here, continue with document creation
       });
 
       return {
@@ -124,10 +121,8 @@ export async function processDocument(
         content: updatedDocument.content,
         userId: updatedDocument.userId,
         vectorId: updatedDocument.vectorId,
-        fileType: file.type,
-        metadata: typeof updatedDocument.metadata === 'string' 
-          ? JSON.parse(updatedDocument.metadata) 
-          : updatedDocument.metadata,
+        fileType: updatedDocument.fileType,
+        metadata: updatedDocument.metadata,
         version: updatedDocument.version,
         createdAt: updatedDocument.createdAt,
         updatedAt: updatedDocument.updatedAt
@@ -176,7 +171,6 @@ async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
 
     return text.trim();
   } catch (error) {
-    console.error('Error extracting PDF text:', error);
     throw new TextExtractionError(
       `Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
@@ -188,7 +182,6 @@ async function extractWordText(buffer: ArrayBuffer): Promise<string> {
     const result = await mammoth.extractRawText({ arrayBuffer: buffer });
     return result.value.trim();
   } catch (error) {
-    console.error('Error extracting Word document text:', error);
     throw new TextExtractionError(
       `Failed to extract text from Word document: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
@@ -200,7 +193,6 @@ async function extractTxtText(buffer: ArrayBuffer): Promise<string> {
     const decoder = new TextDecoder('utf-8');
     return decoder.decode(buffer).trim();
   } catch (error) {
-    console.error('Error extracting TXT text:', error);
     throw new TextExtractionError(
       `Failed to extract text from TXT file: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
@@ -211,11 +203,10 @@ async function createDocumentRelationships(
   documentId: string,
   content: string,
   userId: string
-) {
+): Promise<void> {
   try {
     const embeddingFloat32 = await getEmbedding(content);
     
-    // Validate embedding
     if (!(embeddingFloat32 instanceof Float32Array)) {
       throw new Error('Invalid embedding format for relationship creation');
     }
@@ -229,7 +220,7 @@ async function createDocumentRelationships(
       contentTypes: ['document']
     });
 
-    const relationshipPromises = similar.map(result => {
+    const relationshipPromises = similar.map((result: { content_id: string; score: number }) => {
       if (result.content_id !== documentId) {
         return createRelationship({
           userId,
@@ -247,7 +238,6 @@ async function createDocumentRelationships(
 
     await Promise.all(relationshipPromises.filter(Boolean));
   } catch (error) {
-    console.error('Error creating document relationships:', error);
     throw new Error(
       `Failed to create document relationships: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
