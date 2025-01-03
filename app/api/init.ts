@@ -1,5 +1,5 @@
 import { setupCollections } from '../../lib/milvus/collections';
-import { handleMilvusError } from '@/lib/milvus/error-handler';
+import { handleMilvusError } from '../../lib/milvus/error-handler';
 
 export async function initializeMilvus() {
   try {
