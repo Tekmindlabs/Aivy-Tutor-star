@@ -46,11 +46,13 @@ export class EmbeddingModel {
       try {
         console.log('Loading GTE-Base model...');
 
+        // Update the model options
         const options = {
           revision: 'main',
           quantized: false,
-          executionProviders: ['cpu', 'webgl'] as const,
-          graphOptimizationLevel: 'all' as const
+          executionProviders: ['cpu'] as const, // Remove webgl for Node.js environment
+          graphOptimizationLevel: 'all' as const,
+          useCache: true
         };
 
         const model = await pipeline('feature-extraction', 'Xenova/gte-base', {
@@ -89,26 +91,24 @@ export class EmbeddingModel {
       const processedText = text.trim();
 
       // Generate embedding with specific options
-      const output = await model(processedText, 'mean', true);
+      const output = await model(processedText, {
+        pooling: 'mean',
+        normalize: true
+      });
 
       // Convert output to Float32Array
       if (!output || !output.data) {
         throw new TensorConversionError('Invalid model output');
       }
 
-      // Handle different output types
+      // Ensure output is Float32Array
       let embedding: Float32Array;
       if (output.data instanceof Float32Array) {
         embedding = output.data;
       } else if (ArrayBuffer.isView(output.data)) {
-        // Convert TypedArray to Float32Array
-        const typedArray = output.data as TypedArray;
-        embedding = new Float32Array(typedArray.length);
-        for (let i = 0; i < typedArray.length; i++) {
-          embedding[i] = Number(typedArray[i]);
-        }
+        embedding = new Float32Array(output.data.buffer);
       } else if (Array.isArray(output.data)) {
-        embedding = new Float32Array(output.data.map(Number));
+        embedding = new Float32Array(output.data);
       } else {
         throw new TensorConversionError('Unexpected output format from model');
       }

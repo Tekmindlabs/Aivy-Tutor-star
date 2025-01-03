@@ -7,6 +7,21 @@ import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
 import { Document, VectorResult } from './types';
 
+// Custom error types
+class DocumentProcessingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DocumentProcessingError';
+  }
+}
+
+class TextExtractionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TextExtractionError';
+  }
+}
+
 // Supported file types
 const SUPPORTED_FILE_TYPES = {
   PDF: 'application/pdf',
@@ -22,76 +37,113 @@ export async function processDocument(
   try {
     // Validate file type
     if (!Object.values(SUPPORTED_FILE_TYPES).includes(file.type)) {
-      throw new Error(`Unsupported file type: ${file.type}`);
+      throw new DocumentProcessingError(`Unsupported file type: ${file.type}`);
     }
 
-    // Extract text content
+    // Extract text content with chunking if needed
     const content = await extractText(file);
-    if (!content) {
-      throw new Error('No content could be extracted from the file');
+    if (!content || content.trim().length === 0) {
+      throw new DocumentProcessingError('No content could be extracted from the file');
     }
 
-    // Generate embedding
-    const embeddingFloat32 = await getEmbedding(content);
-    const embedding = Array.from(embeddingFloat32);
-    console.log('Document embedding generated:', embedding.length);
+    // Generate embedding with validation
+    let embedding: number[];
+    try {
+      console.log('Generating embedding for document...');
+      const embeddingFloat32 = await getEmbedding(content);
+      
+      // Validate embedding
+      if (!(embeddingFloat32 instanceof Float32Array)) {
+        throw new DocumentProcessingError('Invalid embedding format: expected Float32Array');
+      }
 
-    // Store document in Prisma
+      // Convert to regular array for storage
+      embedding = Array.from(embeddingFloat32);
+      
+      // Validate embedding dimensions (GTE-base uses 768 dimensions)
+      if (embedding.length !== 768) {
+        throw new DocumentProcessingError(`Invalid embedding dimension: ${embedding.length}, expected 768`);
+      }
+
+      console.log('Document embedding generated successfully:', embedding.length);
+    } catch (error) {
+      console.error('Error generating embedding:', error);
+      throw new DocumentProcessingError(
+        `Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+
+    // Store document in Prisma with proper metadata
     const document = await prisma.document.create({
       data: {
         userId,
         title: file.name,
-        content,
+        content: content.slice(0, 1000000), // Limit content size to prevent DB issues
         fileType: file.type,
         metadata: JSON.stringify({
           size: file.size,
           lastModified: file.lastModified,
-          fileType: file.type
+          fileType: file.type,
+          embeddingDimension: embedding.length,
+          processingTimestamp: new Date().toISOString()
         }),
         version: 1,
         vectorId: null
       },
     });
 
-    // Store vector in Milvus
-    const vectorResult = await insertVector({
-      userId,
-      contentType: 'document',
-      contentId: document.id,
-      embedding,
-      metadata: {
-        title: file.name,
-        fileType: file.type
-      }
-    }) as VectorResult;
+    // Store vector in Milvus with validation
+    try {
+      const vectorResult = await insertVector({
+        userId,
+        contentType: 'document',
+        contentId: document.id,
+        embedding,
+        metadata: {
+          title: file.name,
+          fileType: file.type,
+          documentId: document.id
+        }
+      }) as VectorResult;
 
-    // Update document with vector ID
-    const updatedDocument = await prisma.document.update({
-      where: { id: document.id },
-      data: { vectorId: vectorResult.id }
-    });
+      // Update document with vector ID
+      const updatedDocument = await prisma.document.update({
+        where: { id: document.id },
+        data: { vectorId: vectorResult.id }
+      });
 
-    // Create relationships
-    await createDocumentRelationships(document.id, content, userId);
+      // Create relationships with error handling
+      await createDocumentRelationships(document.id, content, userId).catch(error => {
+        console.error('Warning: Failed to create relationships:', error);
+        // Don't throw here, continue with document creation
+      });
 
-    // Return document with all required fields
-    return {
-      id: updatedDocument.id,
-      title: updatedDocument.title,
-      content: updatedDocument.content,
-      userId: updatedDocument.userId,
-      vectorId: updatedDocument.vectorId,
-      fileType: file.type, // Use the original file type
-      metadata: typeof updatedDocument.metadata === 'string' 
-        ? JSON.parse(updatedDocument.metadata) 
-        : updatedDocument.metadata,
-      version: updatedDocument.version,
-      createdAt: updatedDocument.createdAt,
-      updatedAt: updatedDocument.updatedAt
-    };
+      return {
+        id: updatedDocument.id,
+        title: updatedDocument.title,
+        content: updatedDocument.content,
+        userId: updatedDocument.userId,
+        vectorId: updatedDocument.vectorId,
+        fileType: file.type,
+        metadata: typeof updatedDocument.metadata === 'string' 
+          ? JSON.parse(updatedDocument.metadata) 
+          : updatedDocument.metadata,
+        version: updatedDocument.version,
+        createdAt: updatedDocument.createdAt,
+        updatedAt: updatedDocument.updatedAt
+      };
+    } catch (error) {
+      // Clean up document if vector storage fails
+      await prisma.document.delete({ where: { id: document.id } });
+      throw new DocumentProcessingError(
+        `Failed to store vector: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
   } catch (error) {
     console.error('Error processing document:', error);
-    throw error;
+    throw error instanceof DocumentProcessingError ? error : new DocumentProcessingError(
+      `Document processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -107,7 +159,7 @@ async function extractText(file: File): Promise<string> {
     case SUPPORTED_FILE_TYPES.TXT:
       return extractTxtText(buffer);
     default:
-      throw new Error(`Unsupported file type: ${file.type}`);
+      throw new TextExtractionError(`Unsupported file type: ${file.type}`);
   }
 }
 
@@ -125,7 +177,9 @@ async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
     return text.trim();
   } catch (error) {
     console.error('Error extracting PDF text:', error);
-    throw new Error('Failed to extract text from PDF');
+    throw new TextExtractionError(
+      `Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -135,7 +189,9 @@ async function extractWordText(buffer: ArrayBuffer): Promise<string> {
     return result.value.trim();
   } catch (error) {
     console.error('Error extracting Word document text:', error);
-    throw new Error('Failed to extract text from Word document');
+    throw new TextExtractionError(
+      `Failed to extract text from Word document: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -145,7 +201,9 @@ async function extractTxtText(buffer: ArrayBuffer): Promise<string> {
     return decoder.decode(buffer).trim();
   } catch (error) {
     console.error('Error extracting TXT text:', error);
-    throw new Error('Failed to extract text from TXT file');
+    throw new TextExtractionError(
+      `Failed to extract text from TXT file: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
@@ -156,6 +214,12 @@ async function createDocumentRelationships(
 ) {
   try {
     const embeddingFloat32 = await getEmbedding(content);
+    
+    // Validate embedding
+    if (!(embeddingFloat32 instanceof Float32Array)) {
+      throw new Error('Invalid embedding format for relationship creation');
+    }
+    
     const embedding = Array.from(embeddingFloat32);
     
     const similar = await searchSimilarContent({
@@ -165,21 +229,27 @@ async function createDocumentRelationships(
       contentTypes: ['document']
     });
 
-    for (const result of similar) {
+    const relationshipPromises = similar.map(result => {
       if (result.content_id !== documentId) {
-        await createRelationship({
+        return createRelationship({
           userId,
           sourceId: documentId,
           targetId: result.content_id,
           relationshipType: 'similar_to',
           metadata: {
             similarity_score: result.score,
-            type: 'document-similarity'
+            type: 'document-similarity',
+            timestamp: new Date().toISOString()
           }
         });
       }
-    }
+    });
+
+    await Promise.all(relationshipPromises.filter(Boolean));
   } catch (error) {
     console.error('Error creating document relationships:', error);
+    throw new Error(
+      `Failed to create document relationships: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
