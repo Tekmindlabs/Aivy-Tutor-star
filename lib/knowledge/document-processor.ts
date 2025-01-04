@@ -1,5 +1,4 @@
-import { Prisma } from '@prisma/client';
-
+import { prisma } from '../../lib/prisma';
 import { getEmbedding } from './embeddings';
 import { insertVector } from '../milvus/vectors';
 import { createRelationship } from '../milvus/knowledge-graph';

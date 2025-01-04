@@ -48,7 +48,7 @@ const nextConfig = {
   },
   // Experimental features
   experimental: {
-    serverComponentsExternalPackages: ['onnxruntime-node']
+    serverComponentsExternalPackages: ['@xenova/transformers']
   }
 };
 

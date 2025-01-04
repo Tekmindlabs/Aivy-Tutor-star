@@ -1,4 +1,5 @@
-import { pipeline, Pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
+import { pipeline } from '@xenova/transformers';
+import type { Pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
 
 // Type definition for TypedArray
 type TypedArray =
@@ -13,7 +14,8 @@ type TypedArray =
   | Float64Array
   | BigInt64Array
   | BigUint64Array;
-  
+
+// Global environment declaration
 declare global {
   var env: {
     useLegacyWebImplementation: boolean | undefined;
@@ -21,10 +23,9 @@ declare global {
 }
 
 // Set environment to use legacy build
-globalThis.env = {
-  ...globalThis.env,
-  useLegacyWebImplementation: true,
-};
+if (typeof process !== 'undefined') {
+  process.env.USE_LEGACY = '1';
+}
 
 // Custom error types
 class TensorConversionError extends Error {
@@ -60,18 +61,15 @@ export class EmbeddingModel {
       try {
         console.log('Loading GTE-Base model...');
 
-        // Update the model options
         const options = {
           revision: 'main',
           quantized: false,
-          executionProviders: ['cpu'] as const, // Remove webgl for Node.js environment
-          graphOptimizationLevel: 'all' as const,
-          useCache: true
+          cache_dir: './model-cache',
+          local_files_only: false,
+          use_legacy: true
         };
 
-        const model = await pipeline('feature-extraction', 'Xenova/gte-base-en-v1.5', {
-          ...options,
-        });
+        const model = await pipeline('feature-extraction', 'Xenova/gte-base-en-v1.5', options) as FeatureExtractionPipeline;
 
         if (!model) {
           throw new ModelLoadError('Failed to initialize embedding model');
@@ -95,22 +93,23 @@ export class EmbeddingModel {
     if (!text || typeof text !== 'string') {
       throw new Error('Invalid input: text must be a non-empty string');
     }
-  
+
     try {
       const model = await this.getInstance();
       const processedText = text.trim();
-  
+
       // Generate embedding with specific options matching GTE requirements
       const output = await model(processedText, {
         normalize: true,
         pooling: 'mean',
+        ...(max_length && { max_length })
       });
-  
+
       // Improved tensor data handling
       if (!output || !output.data) {
         throw new TensorConversionError('Invalid model output');
       }
-  
+
       // Ensure proper conversion to Float32Array
       let embedding: Float32Array;
       if (output.data instanceof Float32Array) {
@@ -122,21 +121,24 @@ export class EmbeddingModel {
       } else {
         throw new TensorConversionError('Unexpected output format from model');
       }
-  
+
       // Verify embedding dimension (should be 768 for gte-base)
       if (embedding.length !== 768) {
         throw new Error(`Invalid embedding dimension: ${embedding.length}, expected 768`);
       }
-  
+
       return embedding;
     } catch (error) {
       console.error('Error generating embedding:', error);
       throw error instanceof Error ? error : new Error('Unknown error during embedding generation');
     }
   }
+}
 
 // Public function to get embeddings
-export async function getEmbedding(text: string, options?: { max_length?: number }): Promise<Float32Array> {
+export async function getEmbedding(
+  text: string,
+  options?: { max_length?: number }
+): Promise<Float32Array> {
   return await EmbeddingModel.generateEmbedding(text, options?.max_length);
-}
 }
