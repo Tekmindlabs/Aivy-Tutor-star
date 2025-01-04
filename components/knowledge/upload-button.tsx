@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { toast } from "@/components/ui/use-toast"; // Add toast for error notifications
 
 interface UploadButtonProps {
   onUploadSuccess: () => void;
@@ -28,46 +29,57 @@ export function UploadButton({ onUploadSuccess }: UploadButtonProps) {
         body: formData,
       });
 
-      if (!response.ok) throw new Error("Upload failed");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Upload failed");
+      }
       
       setUploadProgress(100);
-      // Call onUploadSuccess after successful upload
+      toast({
+        title: "Success",
+        description: "Document uploaded successfully",
+      });
       onUploadSuccess();
     } catch (error) {
       console.error("Upload error:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to upload document",
+        variant: "destructive",
+      });
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
       // Reset the file input
-      const fileInput = document.getElementById("file-upload") as HTMLInputElement;
-      if (fileInput) {
-        fileInput.value = "";
-      }
+      e.target.value = '';
     }
   };
 
   return (
-    <div className="relative">
-      <Button
-        variant="outline"
-        disabled={isUploading}
-        onClick={() => document.getElementById("file-upload")?.click()}
-      >
-        <Upload className="h-4 w-4 mr-2" />
-        {isUploading ? "Uploading..." : "Upload Document"}
-        <input
-          id="file-upload"
-          type="file"
-          className="hidden"
-          accept=".pdf,.doc,.docx,.txt"
-          onChange={handleUpload}
-        />
-      </Button>
-      
+    <div>
+      <input
+        type="file"
+        id="file-upload"
+        className="hidden"
+        onChange={handleUpload}
+        accept=".pdf,.txt,.doc,.docx"
+      />
+      <label htmlFor="file-upload">
+        <Button
+          variant="outline"
+          disabled={isUploading}
+          className="cursor-pointer"
+          asChild
+        >
+          <span>
+            <Upload className="h-4 w-4 mr-2" />
+            {isUploading ? "Uploading..." : "Upload"}
+          </span>
+        </Button>
+      </label>
       {isUploading && (
-        <Progress 
-          value={uploadProgress} 
-          className="mt-2"
-        />
+        <Progress value={uploadProgress} className="mt-2" />
       )}
     </div>
   );
