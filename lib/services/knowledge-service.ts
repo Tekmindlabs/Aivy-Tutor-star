@@ -57,21 +57,31 @@ export class KnowledgeService {
     try {
       const client = await getMilvusClient();
       
-      // Get all content vectors for user
+      // Get content nodes
       const contentResults = await client.query({
-        collection_name: 'content_vectors',
+        collection_name: 'content',
         filter: `user_id == "${userId}"`,
-        output_fields: ['id', 'content_type', 'content_id', 'metadata']
+        output_fields: ['content_id', 'content_type', 'metadata']
       });
-
-      // Transform content results into nodes
-      const nodes = contentResults.map((content: VectorResult) => ({
+  
+      // Ensure contentResults is an array and has data
+      if (!contentResults || !Array.isArray(contentResults.data)) {
+        console.log('No content results found or invalid format:', contentResults);
+        return { nodes: [], relationships: [] };
+      }
+  
+      // Transform content into nodes
+      const nodes = contentResults.data.map(content => ({
         id: content.content_id,
         type: content.content_type,
         label: JSON.parse(content.metadata).title || content.content_id,
         metadata: JSON.parse(content.metadata)
       }));
-
+  
+      if (nodes.length === 0) {
+        return { nodes: [], relationships: [] };
+      }
+  
       // Get relationships between nodes
       const relationships = await findRelatedContent({
         userId,
@@ -79,7 +89,7 @@ export class KnowledgeService {
         maxDepth: 3,
         relationshipTypes: ['related', 'references']
       });
-
+  
       // Transform relationships into edges
       const edges = relationships.map(rel => ({
         source: rel.source_id,
@@ -87,9 +97,13 @@ export class KnowledgeService {
         type: rel.relationship_type,
         metadata: JSON.parse(rel.metadata)
       }));
-
-      return { nodes, edges };
+  
+      return {
+        nodes,
+        relationships: edges
+      };
     } catch (error) {
+      console.error('Error in getKnowledgeGraph:', error);
       handleMilvusError(error);
       throw error;
     }

@@ -1,7 +1,8 @@
 // /app/api/knowledge/graph/route.ts
 
 import { NextRequest } from 'next/server';
-import { auth } from '@/auth';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { KnowledgeService } from '@/lib/services/knowledge-service';
 import { handleMilvusError } from '@/lib/milvus/error-handler';
 
@@ -9,7 +10,7 @@ const knowledgeService = new KnowledgeService();
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
+    const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -27,10 +28,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
+    const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
+
 
     const { sourceId, targetId, type } = await req.json();
     
