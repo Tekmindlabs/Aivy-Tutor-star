@@ -8,47 +8,81 @@ export function DocumentUploader() {
   const router = useRouter();
 
   const uploadDocument = async (file: File) => {
+
     try {
+  
       setUploading(true);
+  
       
+  
       const formData = new FormData();
+  
       formData.append('file', file);
-
-      // Simulate progress updates
-      const progressInterval = setInterval(() => {
-        setProgress(prev => Math.min(prev + 10, 90));
-      }, 500);
-
+  
+  
       const response = await fetch('/api/knowledge/upload', {
+  
         method: 'POST',
+  
         body: formData,
+  
       });
-
-      clearInterval(progressInterval);
-
-      const data = await response.json();
-
-      if (data.success) {
-        setProgress(100);
-        notification.success({
-          message: 'Success',
-          description: 'Document uploaded successfully',
-        });
-        
-        // Refresh the documents list
-        router.refresh();
-      } else {
-        throw new Error(data.error || 'Upload failed');
+  
+  
+      if (!response.ok) {
+  
+        throw new Error(`Upload failed: ${response.statusText}`);
+  
       }
+  
+  
+      const data = await response.json();
+  
+  
+      if (data.success) {
+  
+        setProgress(100);
+  
+        notification.success({
+  
+          message: 'Success',
+  
+          description: data.message || 'Document uploaded successfully',
+  
+        });
+  
+        
+  
+        // Emit an event for successful upload
+  
+        window.dispatchEvent(new Event('documentUploaded'));
+  
+      } else {
+  
+        throw new Error(data.error || 'Upload failed');
+  
+      }
+  
     } catch (error) {
+  
+      setProgress(0);
+  
       notification.error({
+  
         message: 'Error',
+  
         description: error.message || 'Failed to upload document',
+  
       });
+  
     } finally {
+  
       setUploading(false);
+  
       setTimeout(() => setProgress(0), 1000);
+  
     }
+  
   };
 
   return (
