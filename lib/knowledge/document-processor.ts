@@ -35,6 +35,16 @@ export async function processDocument(
   userId: string
 ): Promise<Document> {
   try {
+
+    // Validate user
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+
+    if (!user) {
+      throw new DocumentProcessingError('Invalid user ID');
+    }
     // Validate file type
     if (!Object.values(SUPPORTED_FILE_TYPES).includes(file.type)) {
       throw new DocumentProcessingError(`Unsupported file type: ${file.type}`);
