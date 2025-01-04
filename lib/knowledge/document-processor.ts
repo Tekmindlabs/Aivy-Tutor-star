@@ -124,7 +124,8 @@ export async function processDocument(
         userId: updatedDocument.userId,
         vectorId: updatedDocument.vectorId,
         fileType: updatedDocument.fileType,
-        metadata: updatedDocument.metadata || {},
+        metadata: updatedDocument.metadata ? 
+          (typeof updatedDocument.metadata === 'object' ? updatedDocument.metadata : null) : null,
         version: updatedDocument.version,
         createdAt: updatedDocument.createdAt,
         updatedAt: updatedDocument.updatedAt

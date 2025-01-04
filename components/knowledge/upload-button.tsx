@@ -5,9 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Upload } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
-export function UploadButton() {
+interface UploadButtonProps {
+  onUploadSuccess: () => void;
+}
+
+export function UploadButton({ onUploadSuccess }: UploadButtonProps) {
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0); // Move useState inside component
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
@@ -27,11 +31,17 @@ export function UploadButton() {
       if (!response.ok) throw new Error("Upload failed");
       
       setUploadProgress(100);
-      // Handle successful upload
+      // Call onUploadSuccess after successful upload
+      onUploadSuccess();
     } catch (error) {
       console.error("Upload error:", error);
     } finally {
       setIsUploading(false);
+      // Reset the file input
+      const fileInput = document.getElementById("file-upload") as HTMLInputElement;
+      if (fileInput) {
+        fileInput.value = "";
+      }
     }
   };
 

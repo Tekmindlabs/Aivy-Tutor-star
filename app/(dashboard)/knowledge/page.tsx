@@ -25,13 +25,19 @@ export default function KnowledgeBasePage() {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-bold">Knowledge Base</h1>
-          <div className="flex gap-4">
-            <UploadButton onUploadSuccess={handleUploadSuccess} />
-            <Button variant="outline">
-              <BookOpen className="h-4 w-4 mr-2" />
-              New Note
-            </Button>
-          </div>
+<div className="flex gap-4">
+  <UploadButton onUploadSuccess={() => {
+    // This will trigger the success state for 3 seconds
+    handleUploadSuccess();
+    // Optionally, you can add additional actions here
+    console.log('Upload completed successfully');
+    // If you have a refresh function for the DocumentsList, call it here
+  }} />
+  <Button variant="outline">
+    <BookOpen className="h-4 w-4 mr-2" />
+    New Note
+  </Button>
+</div>
         </div>
 
         <Card className="p-4 mb-8">

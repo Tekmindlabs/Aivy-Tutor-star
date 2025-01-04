@@ -29,9 +29,7 @@ export class EmbeddingModel {
 
       // Initialize Jina embeddings with your API key
       this.embeddings = new JinaEmbeddings({
-        apiKey: process.env.JINA_API_KEY,
-        modelName: 'jina-embeddings-v3-base-en',
-        apiUrl: 'https://api.jina.ai/v1/embeddings'
+        apiKey: process.env.JINA_API_KEY
       });
 
       if (!this.embeddings) {
