@@ -4,7 +4,6 @@ import { Document, Note, URL, Vector, VectorResult } from '@/lib/knowledge/types
 import { handleMilvusError } from '@/lib/milvus/error-handler';
 import { createRelationship, findRelatedContent } from '@/lib/milvus/knowledge-graph';
 import { getMilvusClient } from '@/lib/milvus/client';
-import { GraphRelationship } from '../services/knowledge-graph';
 
 interface GraphNode {
   id: string;
@@ -13,10 +12,16 @@ interface GraphNode {
   metadata: any;
 }
 
+interface GraphEdge {
+  source: string;
+  target: string;
+  type: string;
+  metadata: any;
+}
 
 interface GraphData {
   nodes: GraphNode[];
-  relationships: any[];
+  relationships: GraphEdge[];
 }
 
 export class KnowledgeService {
@@ -54,7 +59,7 @@ export class KnowledgeService {
       // Create relationships with similar content
       for (const content of similarContent) {
         if (content.content_id !== document.id) {
-          await createRelationship({
+          const relationshipResult = await createRelationship({
             userId,
             sourceId: document.id,
             targetId: content.content_id,
@@ -65,7 +70,7 @@ export class KnowledgeService {
             }
           });
 
-          console.log('Relationship created:', relationship);
+          console.log('Relationship created:', relationshipResult);
         }
       }
     } catch (error) {
@@ -74,57 +79,66 @@ export class KnowledgeService {
     }
   }
 
-async getKnowledgeGraph(userId: string) {
-  try {
-    const client = await getMilvusClient();
-    
-    // Get content nodes
-    const contentResults = await client.query({
-      collection_name: 'content',
-      filter: `user_id == "${userId}"`,
-      output_fields: ['content_id', 'content_type', 'metadata']
-    });
+  async getKnowledgeGraph(userId: string): Promise<GraphData> {
+    try {
+      const client = await getMilvusClient();
+      
+      // Get content nodes
+      const contentResults = await client.query({
+        collection_name: 'content',
+        filter: `user_id == "${userId}"`,
+        output_fields: ['content_id', 'content_type', 'metadata']
+      });
 
-    // Ensure contentResults is an array and has data
-    if (!contentResults || !Array.isArray(contentResults.data)) {
-      console.log('No content results found or invalid format:', contentResults);
-      return { nodes: [], relationships: [] };
+      // Ensure contentResults is an array and has data
+      if (!contentResults?.data || !Array.isArray(contentResults.data)) {
+        console.log('No content results found or invalid format:', contentResults);
+        return { nodes: [], relationships: [] };
+      }
+
+      // Transform content into nodes
+      const nodes: GraphNode[] = contentResults.data.map(content => ({
+        id: content.content_id,
+        type: content.content_type,
+        label: this.parseMetadata(content.metadata).title || content.content_id,
+        metadata: this.parseMetadata(content.metadata)
+      }));
+
+      if (nodes.length === 0) {
+        return { nodes: [], relationships: [] };
+      }
+
+      // Get relationships between nodes
+      const relationshipResults = await findRelatedContent({
+        userId,
+        contentId: nodes[0]?.id,
+        maxDepth: 3,
+        relationshipTypes: ['related', 'references']
+      });
+
+      // Transform relationships into edges
+      const relationships: GraphEdge[] = relationshipResults.data.map(rel => ({
+        source: rel.source_id,
+        target: rel.target_id,
+        type: rel.relationship_type,
+        metadata: this.parseMetadata(rel.metadata)
+      }));
+
+      return { nodes, relationships };
+    } catch (error) {
+      handleMilvusError(error);
+      throw error;
     }
-
-    // Transform content into nodes
-    const nodes = contentResults.data.map((content: VectorResult) => ({
-      id: content.content_id,
-      type: content.content_type,
-      label: JSON.parse(content.metadata).title || content.content_id,
-      metadata: JSON.parse(content.metadata)
-    }));
-
-    if (nodes.length === 0) {
-      return { nodes: [], relationships: [] };
-    }
-
-    // Get relationships between nodes
-    const relationships = await findRelatedContent({
-      userId,
-      contentId: nodes[0]?.id || '',
-      maxDepth: 3,
-    });
-
-    return { nodes, relationships };
-  } catch (error) {
-    handleMilvusError(error);
-    throw error;
   }
-}
 
   async createContentRelationship(
     userId: string,
     sourceId: string,
     targetId: string,
     relationshipType: string
-  ) {
+  ): Promise<void> {
     try {
-      await createRelationship({
+      const result = await createRelationship({
         userId,
         sourceId,
         targetId,
@@ -133,9 +147,20 @@ async getKnowledgeGraph(userId: string) {
           createdAt: new Date().toISOString()
         }
       });
+      console.log('Relationship created:', result);
     } catch (error) {
       handleMilvusError(error);
       throw error;
+    }
+  }
+
+  private parseMetadata(metadata: string | null | undefined): any {
+    if (!metadata) return {};
+    try {
+      return JSON.parse(metadata);
+    } catch (error) {
+      console.warn('Failed to parse metadata:', error);
+      return {};
     }
   }
 }

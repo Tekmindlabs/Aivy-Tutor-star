@@ -17,7 +17,15 @@ export async function GET(req: NextRequest) {
     }
 
     const client = await getMilvusClient();
-    const contentCount = await client.count('content', `user_id == "${session.user.id}"`);
+    const countResult = await client.query({
+      collection_name: 'content',   
+      filter: `user_id == "${session.user.id}"`,    
+      output_fields: ['id'], // You can specify any field here
+    
+    });
+    
+    const contentCount = countResult.length;
+
     console.log('Milvus content count:', contentCount);
 
     const graphData = await knowledgeService.getKnowledgeGraph(session.user.id);
@@ -39,6 +47,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
+
 
     const { sourceId, targetId, type } = await req.json();
     
