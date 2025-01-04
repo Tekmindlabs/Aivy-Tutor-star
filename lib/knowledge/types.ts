@@ -5,11 +5,22 @@ export interface Document {
   content: string;
   userId: string;
   vectorId: string | null;
-  metadata: Record<string, any> | null;
+  fileType: string;
   version: number;
+  metadata?: {
+    previousVersions?: Array<{
+      version: number;
+      updatedAt: Date;
+    }>;
+    size?: number;
+    lastModified?: number;
+    fileType?: string;
+    embeddingDimension?: number;
+    processingTimestamp?: string;
+    [key: string]: any;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
-  fileType: string;
 }
 
 export interface URL {

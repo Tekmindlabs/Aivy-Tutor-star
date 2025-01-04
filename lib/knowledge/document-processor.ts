@@ -9,6 +9,18 @@ import { Document, VectorResult } from './types';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+interface DocumentMetadata {
+  size: number;
+  lastModified: number;
+  fileType: string;
+  embeddingDimension?: number;
+  processingTimestamp: string;
+  previousVersions?: Array<{
+    version: number;
+    updatedAt: Date;
+  }>;
+}
+
 // Custom error types
 class DocumentProcessingError extends Error {
   constructor(message: string) {
@@ -41,6 +53,37 @@ function getProtoPath() {
   return path.join(basePath, 'schema.proto');
 }
 
+async function checkExistingDocument(
+  userId: string,
+  content: string,
+  fileName: string
+): Promise<Document | null> {
+  try {
+    return await prisma.document.findFirst({
+      where: {
+        userId,
+        content,
+        title: fileName
+      }
+    });
+  } catch (error) {
+    console.error('Error checking existing document:', error);
+    return null;
+  }
+}
+
+// Add this helper function for type safety
+function sanitizeMetadata(metadata: any): DocumentMetadata {
+  return {
+    size: Number(metadata.size) || 0,
+    lastModified: Number(metadata.lastModified) || Date.now(),
+    fileType: String(metadata.fileType) || '',
+    processingTimestamp: new Date().toISOString(),
+    previousVersions: Array.isArray(metadata.previousVersions) ? metadata.previousVersions : [],
+    ...(metadata.embeddingDimension && { embeddingDimension: Number(metadata.embeddingDimension) })
+  };
+}
+
 export async function processDocument(
   file: File,
   userId: string
@@ -68,9 +111,45 @@ export async function processDocument(
     if (!content || content.trim().length === 0) {
       throw new DocumentProcessingError('No content could be extracted from the file');
     }
+    const existingDocument = await checkExistingDocument(userId, content, file.name);
 
-    // Generate embedding with validation
+
+    if (existingDocument) {
+      // Update existing document with new version
+      const updatedMetadata: DocumentMetadata = sanitizeMetadata({
+        ...existingDocument.metadata,
+        previousVersions: [
+          ...(existingDocument.metadata?.previousVersions || []),
+          {
+            version: existingDocument.version,
+            updatedAt: existingDocument.updatedAt
+          }
+        ],
+        lastModified: file.lastModified,
+        size: file.size,
+        processingTimestamp: new Date().toISOString()
+      });
+
+      const updatedDocument = await prisma.document.update({
+        where: { id: existingDocument.id },
+        data: {
+          version: existingDocument.version + 1,
+          updatedAt: new Date(),
+          metadata: updatedMetadata
+        }
+      });
+
+      return {
+        ...updatedDocument,
+        metadata: sanitizeMetadata(updatedDocument.metadata)
+      };
+    }
+
+
+    // Generate embedding for new document
+
     let embedding: number[];
+
     try {
       console.log('Generating embedding for document...');
       const embeddingFloat32 = await getEmbedding(content);
@@ -95,19 +174,22 @@ export async function processDocument(
     }
 
     // Store document in Prisma with proper metadata
+    const newDocumentMetadata: DocumentMetadata = sanitizeMetadata({
+      size: file.size,
+      lastModified: file.lastModified,
+      fileType: file.type,
+      embeddingDimension: embedding.length,
+      processingTimestamp: new Date().toISOString(),
+      previousVersions: []
+    });
+
     const document = await prisma.document.create({
       data: {
         userId,
         title: file.name,
         content: content.slice(0, 1000000),
         fileType: file.type,
-        metadata: {
-          size: file.size,
-          lastModified: file.lastModified,
-          fileType: file.type,
-          embeddingDimension: embedding.length,
-          processingTimestamp: new Date().toISOString()
-        },
+        metadata: newDocumentMetadata,
         version: 1,
         vectorId: null
       },
@@ -146,7 +228,7 @@ export async function processDocument(
         vectorId: updatedDocument.vectorId,
         fileType: updatedDocument.fileType,
         metadata: updatedDocument.metadata ? 
-          (typeof updatedDocument.metadata === 'object' ? updatedDocument.metadata : null) : null,
+          (typeof updatedDocument.metadata === 'object' ? sanitizeMetadata(updatedDocument.metadata) : null) : null,
         version: updatedDocument.version,
         createdAt: updatedDocument.createdAt,
         updatedAt: updatedDocument.updatedAt

@@ -64,10 +64,15 @@ export async function POST(req: NextRequest) {
     console.log('Processing document for user ID:', session.user.id);
     const document = await processDocument(uploadedFile, session.user.id);
     
+    // Updated response to include version information
     return Response.json({
       success: true,
       document,
-      message: "Document uploaded successfully"
+      message: document.version > 1 ? 
+        `Document updated to version ${document.version}` : 
+        "Document uploaded successfully",
+      version: document.version,
+      isUpdate: document.version > 1
     });
 
   } catch (error: unknown) {
@@ -79,3 +84,11 @@ export async function POST(req: NextRequest) {
     }, { status: 500 });
   }
 }
+
+// Add configuration for API route
+export const config = {
+  api: {
+    bodyParser: false, // Disable the default body parser
+    responseLimit: false, // Remove the response size limit
+  },
+};
