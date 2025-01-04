@@ -1,10 +1,9 @@
-// /app/api/knowledge/graph/route.ts
-
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { KnowledgeService } from '@/lib/services/knowledge-service';
 import { handleMilvusError } from '@/lib/milvus/error-handler';
+import { getMilvusClient } from '@/lib/milvus/client';
 
 const knowledgeService = new KnowledgeService();
 
@@ -40,7 +39,6 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
-
 
     const { sourceId, targetId, type } = await req.json();
     

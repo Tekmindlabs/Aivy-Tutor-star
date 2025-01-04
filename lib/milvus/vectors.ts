@@ -82,9 +82,9 @@ export async function insertVector({
       metadata: JSON.stringify(metadata)
     };
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Vector insertion failed:', {
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       userId,
       contentId,
       timestamp: new Date().toISOString()
@@ -150,9 +150,9 @@ export async function searchSimilarContent({
 
     return results;
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Similarity search failed:', {
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       userId,
       timestamp: new Date().toISOString()
     });
