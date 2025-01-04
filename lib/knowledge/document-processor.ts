@@ -244,6 +244,12 @@ async function createDocumentRelationships(
       contentTypes: ['document']
     });
 
+    // Add validation to ensure similar is an array
+    if (!Array.isArray(similar)) {
+      console.warn('searchSimilarContent did not return an array:', similar);
+      return; // Exit early if no valid results
+    }
+
     const relationshipPromises = similar.map((result: { content_id: string; score: number }) => {
       if (result.content_id !== documentId) {
         return createRelationship({

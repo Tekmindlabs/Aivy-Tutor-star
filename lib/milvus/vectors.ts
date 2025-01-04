@@ -19,8 +19,10 @@ export async function insertVector({
   const client = await getMilvusClient();
   
   // Verify embedding dimension
-  if (embedding.length !== 768) {
+  if (embedding.length !== 1024) {
+
     throw new Error('Invalid embedding dimension');
+  
   }
 
   const vectorId = uuidv4();
