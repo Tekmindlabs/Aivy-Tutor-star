@@ -20,7 +20,24 @@ export function KnowledgeGraphVisualization({
   relationships
 }: KnowledgeGraphVisualizationProps) {
   const graphRef = useRef<any>();
-  const [graphData, setGraphData] = useState({
+  const [graphData, setGraphData] = useState<{
+    nodes: {
+      id: string;
+      label: string;
+      type: string;
+      color: string;
+      size: number;
+      metadata: Record<string, any> | undefined;
+    }[];
+    links: {
+      source: string;
+      target: string;
+      type: string;
+      color: string;
+      width: number;
+      metadata: Record<string, any> | undefined;
+    }[];
+  }>({
     nodes: [],
     links: []
   });
@@ -117,7 +134,6 @@ export function KnowledgeGraphVisualization({
           backgroundColor="#ffffff"
           linkDirectionalArrowLength={3.5}
           linkDirectionalArrowRelPos={1}
-          d3Force={('charge', null)}
           d3VelocityDecay={0.3}
           warmupTicks={100}
           cooldownTicks={50}
