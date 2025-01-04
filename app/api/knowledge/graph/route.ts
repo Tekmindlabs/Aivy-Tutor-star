@@ -14,9 +14,12 @@ export async function GET(req: NextRequest) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    console.log('Fetching graph data for user:', session.user.id);
     const graphData = await knowledgeService.getKnowledgeGraph(session.user.id);
+    
     return Response.json(graphData);
   } catch (error) {
+    console.error('Error fetching graph data:', error);
     handleMilvusError(error);
     return Response.json({ error: "Failed to fetch graph data" }, { status: 500 });
   }
@@ -47,10 +50,8 @@ export async function POST(req: NextRequest) {
 
     return Response.json({ success: true });
   } catch (error) {
+    console.error('Error creating relationship:', error);
     handleMilvusError(error);
-    return Response.json(
-      { error: "Failed to create relationship" }, 
-      { status: 500 }
-    );
+    return Response.json({ error: "Failed to create relationship" }, { status: 500 });
   }
 }
