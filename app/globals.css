@@ -82,3 +82,17 @@
 .dark .prose pre {
   @apply bg-gray-900 text-gray-100;
 }
+
+/* styles/globals.css */
+.knowledge-graph-container {
+  width: 100%;
+  height: 600px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.knowledge-graph-container svg {
+  width: 100%;
+  height: 100%;
+}

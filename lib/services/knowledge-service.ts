@@ -1,3 +1,5 @@
+// /lib/services/knowledge-service.ts
+
 import { getEmbedding } from '@/lib/knowledge/embeddings';
 import { insertVector, searchSimilarContent } from '@/lib/milvus/vectors';
 import { Document, Note, URL, Vector } from '@/lib/knowledge/types';
