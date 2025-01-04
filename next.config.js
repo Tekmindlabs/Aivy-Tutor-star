@@ -12,6 +12,7 @@ const nextConfig = {
       http: require.resolve('stream-http'),
       https: require.resolve('https-browserify'), 
       zlib: require.resolve('browserify-zlib'),
+      http2: false,
       net: false,
       tls: false,
       fs: false,

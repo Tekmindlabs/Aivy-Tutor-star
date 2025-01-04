@@ -1,8 +1,14 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { KnowledgeGraphVisualization } from '@/components/KnowledgeGraphVisualization';
 import { GraphNode, GraphRelationship } from '@/lib/services/knowledge-graph';
+import dynamic from 'next/dynamic';
+
+// Dynamic import of KnowledgeGraphVisualization with SSR disabled
+const DynamicKnowledgeGraph = dynamic(
+  () => import('@/components/KnowledgeGraphVisualization').then(mod => mod.KnowledgeGraphVisualization),
+  { ssr: false }
+);
 
 export default function KnowledgeGraphPage() {
   const [graphData, setGraphData] = useState<{
@@ -30,7 +36,6 @@ export default function KnowledgeGraphPage() {
       
       const data = await response.json();
       
-      // Validate the data structure
       if (!Array.isArray(data.nodes) || !Array.isArray(data.relationships)) {
         throw new Error('Invalid data structure received from API');
       }
@@ -75,8 +80,8 @@ export default function KnowledgeGraphPage() {
           <div className="text-gray-500">Loading knowledge graph...</div>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow">
-          <KnowledgeGraphVisualization 
+        <div className="bg-white rounded-lg shadow h-[600px]">
+          <DynamicKnowledgeGraph 
             nodes={graphData.nodes}
             relationships={graphData.relationships}
           />

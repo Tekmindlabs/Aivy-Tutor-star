@@ -1,14 +1,13 @@
-// /app/knowledge/graph/layout.tsx
-
-import { auth } from '@/auth'
+import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+
 
 export default async function KnowledgeGraphLayout({
   children
 }: {
   children: React.ReactNode
 }) {
-  const session = await auth()
+  const session = await getSession()
 
   if (!session?.user) {
     redirect('/sign-in')
