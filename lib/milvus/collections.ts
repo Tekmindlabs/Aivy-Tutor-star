@@ -2,7 +2,7 @@ import { DataType } from '@zilliz/milvus2-sdk-node';
 import { getMilvusClient } from './client';
 import { ShowCollectionsResponse } from '@zilliz/milvus2-sdk-node/dist/milvus/types/Collection';
 
-export const VECTOR_DIM = 768; // GTE-Base dimension
+export const VECTOR_DIM = 1024; // GTE-Base dimension
 
 export async function setupCollections() {
   try {

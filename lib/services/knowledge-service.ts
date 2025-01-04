@@ -116,8 +116,7 @@ export class KnowledgeService {
       // 2. Delete vector from Milvus if it exists
       if (document.vectorId) {
         const client = await getMilvusClient();
-        await client.deleteEntities({
-          collection_name: 'content',
+        await client.delete({
           expr: `id in [${document.vectorId}]`
         });
         console.log('🗑️ Deleted vector from Milvus:', document.vectorId);
@@ -133,8 +132,7 @@ export class KnowledgeService {
   
       if (relationshipResults.data && relationshipResults.data.length > 0) {
         const client = await getMilvusClient();
-        await client.deleteEntities({
-          collection_name: 'relationships',
+        await client.delete({
           expr: `source_id == "${documentId}" || target_id == "${documentId}"`
         });
         console.log('🔗 Deleted relationships from knowledge graph');
@@ -157,18 +155,20 @@ export class KnowledgeService {
 
   async getKnowledgeGraph(userId: string): Promise<GraphData> {
     try {
+      console.log('Fetching knowledge graph for user:', userId);
       const client = await getMilvusClient();
       
-      // Get content nodes
+      // Get content nodes with better error handling
       const contentResults = await client.query({
-        collection_name: 'content',
+        collection_name: 'content_vectors', // Make sure this matches your collection name
         filter: `user_id == "${userId}"`,
         output_fields: ['content_id', 'content_type', 'metadata']
       });
 
-      // Ensure contentResults is an array and has data
+      console.log('Raw content results:', contentResults);
+
       if (!contentResults?.data || !Array.isArray(contentResults.data)) {
-        console.log('No content results found or invalid format:', contentResults);
+        console.warn('No content results found:', contentResults);
         return { nodes: [], relationships: [] };
       }
 
