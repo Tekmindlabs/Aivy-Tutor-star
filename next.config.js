@@ -16,6 +16,15 @@ const nextConfig = {
       path: false
     };
 
+    // Add proto file handling
+    config.module.rules.push({
+      test: /\.proto$/,
+      type: 'asset/resource',
+      generator: {
+        filename: 'static/proto/[name][ext]'
+      }
+    });
+
     // Combined alias configuration (from both webpack and former babel config)
     if (!isServer) {
       config.resolve.alias = {
@@ -48,7 +57,10 @@ const nextConfig = {
   },
   // Experimental features
   experimental: {
-    serverComponentsExternalPackages: ['langchain', '@langchain/community']
+    serverComponentsExternalPackages: ['langchain', '@langchain/community', '@zilliz/milvus2-sdk-node'],
+    outputFileTracingIncludes: {
+      '/api/**/*': ['node_modules/@zilliz/milvus2-sdk-node/dist/proto/**/*'],
+    },
   },
   // Environment variables
   env: {

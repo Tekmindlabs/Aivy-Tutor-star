@@ -6,6 +6,8 @@ import { searchSimilarContent } from '../milvus/vectors';
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
 import { Document, VectorResult } from './types';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // Custom error types
 class DocumentProcessingError extends Error {
@@ -30,25 +32,36 @@ const SUPPORTED_FILE_TYPES = {
   TXT: 'text/plain',
 };
 
+// Helper function to get proto path
+function getProtoPath() {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const basePath = isDevelopment 
+    ? path.join(process.cwd(), 'public', 'proto') 
+    : path.join(process.cwd(), '.next', 'static', 'proto');
+  return path.join(basePath, 'schema.proto');
+}
+
 export async function processDocument(
   file: File,
   userId: string
 ): Promise<Document> {
   try {
-
     // Validate user
     const user = await prisma.user.findUnique({
       where: { id: userId }
     });
 
-
     if (!user) {
       throw new DocumentProcessingError('Invalid user ID');
     }
+
     // Validate file type
     if (!Object.values(SUPPORTED_FILE_TYPES).includes(file.type)) {
       throw new DocumentProcessingError(`Unsupported file type: ${file.type}`);
     }
+
+    // Use the correct proto path
+    const protoPath = getProtoPath();
 
     // Extract text content with chunking if needed
     const content = await extractText(file);
@@ -69,10 +82,8 @@ export async function processDocument(
 
       embedding = Array.from(embeddingFloat32);
       
-      if (embedding.length !== 1024) { // Change from 768 to 1024
-
+      if (embedding.length !== 1024) {
         throw new DocumentProcessingError(`Invalid embedding dimension: ${embedding.length}, expected 1024`);
-      
       }
 
       console.log('Document embedding generated successfully:', embedding.length);
