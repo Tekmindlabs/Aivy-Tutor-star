@@ -48,7 +48,11 @@ const nextConfig = {
   },
   // Experimental features
   experimental: {
-    serverComponentsExternalPackages: ['@xenova/transformers']
+    serverComponentsExternalPackages: ['langchain', '@langchain/community']
+  },
+  // Environment variables
+  env: {
+    JINA_API_KEY: process.env.JINA_API_KEY,
   }
 };
 

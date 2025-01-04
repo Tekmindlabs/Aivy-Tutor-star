@@ -1,31 +1,4 @@
-import { pipeline } from '@xenova/transformers';
-import type { Pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
-
-// Type definition for TypedArray
-type TypedArray =
-  | Int8Array
-  | Uint8Array
-  | Uint8ClampedArray
-  | Int16Array
-  | Uint16Array
-  | Int32Array
-  | Uint32Array
-  | Float32Array
-  | Float64Array
-  | BigInt64Array
-  | BigUint64Array;
-
-// Global environment declaration
-declare global {
-  var env: {
-    useLegacyWebImplementation: boolean | undefined;
-  };
-}
-
-// Set environment to use legacy build
-if (typeof process !== 'undefined') {
-  process.env.USE_LEGACY = '1';
-}
+import { JinaEmbeddings } from 'langchain/embeddings/jina';
 
 // Custom error types
 class TensorConversionError extends Error {
@@ -43,88 +16,55 @@ class ModelLoadError extends Error {
 }
 
 export class EmbeddingModel {
-  private static instance: FeatureExtractionPipeline | null = null;
+  private static embeddings: JinaEmbeddings | null = null;
   private static isLoading: boolean = false;
-  private static loadingPromise: Promise<FeatureExtractionPipeline> | null = null;
 
-  static async getInstance(): Promise<FeatureExtractionPipeline> {
-    if (this.instance) {
-      return this.instance;
+  private static async getInstance(): Promise<JinaEmbeddings> {
+    if (this.embeddings) {
+      return this.embeddings;
     }
 
-    if (this.loadingPromise) {
-      return this.loadingPromise;
-    }
+    try {
+      console.log('Initializing Jina embeddings...');
 
-    this.isLoading = true;
-    this.loadingPromise = (async () => {
-      try {
-        console.log('Loading GTE-Base model...');
+      // Initialize Jina embeddings with your API key
+      this.embeddings = new JinaEmbeddings({
+        jinaApiKey: process.env.JINA_API_KEY, // Make sure to add this to your .env file
+        modelName: 'jina-embeddings-v3-base-en', // or your preferred model
+        apiUrl: 'https://api.jina.ai/v1/embeddings'
+      });
 
-        const options = {
-          revision: 'main',
-          quantized: false,
-          cache_dir: './model-cache',
-          local_files_only: false,
-          use_legacy: true
-        };
-
-        const model = await pipeline('feature-extraction', 'Xenova/gte-base-en-v1.5', options) as FeatureExtractionPipeline;
-
-        if (!model) {
-          throw new ModelLoadError('Failed to initialize embedding model');
-        }
-
-        this.instance = model;
-        return this.instance;
-      } catch (error) {
-        console.error('Error loading model:', error);
-        throw new ModelLoadError(`Model initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      } finally {
-        this.isLoading = false;
-        this.loadingPromise = null;
+      if (!this.embeddings) {
+        throw new ModelLoadError('Failed to initialize Jina embeddings');
       }
-    })();
 
-    return this.loadingPromise;
+      return this.embeddings;
+    } catch (error) {
+      console.error('Error initializing Jina embeddings:', error);
+      throw new ModelLoadError(`Model initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      this.isLoading = false;
+    }
   }
 
-  static async generateEmbedding(text: string, max_length?: number): Promise<Float32Array> {
+  public static async generateEmbedding(text: string): Promise<Float32Array> {
     if (!text || typeof text !== 'string') {
       throw new Error('Invalid input: text must be a non-empty string');
     }
 
     try {
-      const model = await this.getInstance();
+      const embeddings = await this.getInstance();
       const processedText = text.trim();
 
-      // Generate embedding with specific options matching GTE requirements
-      const output = await model(processedText, {
-        normalize: true,
-        pooling: 'mean',
-        ...(max_length && { max_length })
-      });
+      // Generate embeddings using Jina
+      const result = await embeddings.embedQuery(processedText);
 
-      // Improved tensor data handling
-      if (!output || !output.data) {
-        throw new TensorConversionError('Invalid model output');
-      }
+      // Convert the result to Float32Array
+      const embedding = new Float32Array(result);
 
-      // Ensure proper conversion to Float32Array
-      let embedding: Float32Array;
-      if (output.data instanceof Float32Array) {
-        embedding = output.data;
-      } else if (ArrayBuffer.isView(output.data)) {
-        embedding = new Float32Array(output.data.buffer);
-      } else if (Array.isArray(output.data)) {
-        embedding = new Float32Array(output.data);
-      } else {
-        throw new TensorConversionError('Unexpected output format from model');
-      }
-
-      // Verify embedding dimension (should be 768 for gte-base)
-      if (embedding.length !== 768) {
-        throw new Error(`Invalid embedding dimension: ${embedding.length}, expected 768`);
+      // Verify embedding dimension
+      if (embedding.length === 0) {
+        throw new TensorConversionError('Empty embedding generated');
       }
 
       return embedding;
@@ -133,12 +73,17 @@ export class EmbeddingModel {
       throw error instanceof Error ? error : new Error('Unknown error during embedding generation');
     }
   }
+
+  public static async clearInstance(): Promise<void> {
+    this.embeddings = null;
+    this.isLoading = false;
+  }
 }
 
 // Public function to get embeddings
 export async function getEmbedding(
   text: string,
-  options?: { max_length?: number }
+  options?: { maxLength?: number }
 ): Promise<Float32Array> {
-  return await EmbeddingModel.generateEmbedding(text, options?.max_length);
+  return await EmbeddingModel.generateEmbedding(text);
 }
