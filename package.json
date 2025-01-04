@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "if not exist .next\\proto\\proto mkdir .next\\proto\\proto && xcopy /S /I /Y public\\proto\\* .next\\proto\\proto\\ && next dev",
+    "dev": "powershell -Command \"if (!(Test-Path .next\\proto\\proto)) { New-Item -ItemType Directory -Path .next\\proto\\proto -Force }; Copy-Item -Path public\\proto\\* -Destination .next\\proto\\proto -Recurse -Force\" && next dev",
     "build": "mkdir -p .next/proto/proto && xcopy /S /I public\\proto\\* .next\\proto\\proto\\ && next build",
     "start": "next start",
     "lint": "next lint",
