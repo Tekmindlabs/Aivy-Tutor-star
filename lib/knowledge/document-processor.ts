@@ -19,6 +19,7 @@ interface DocumentMetadata {
     version: number;
     updatedAt: Date;
   }>;
+  [key: string]: any; // Add this index signature
 }
 
 // Custom error types
@@ -59,13 +60,20 @@ async function checkExistingDocument(
   fileName: string
 ): Promise<Document | null> {
   try {
-    return await prisma.document.findFirst({
+    const doc = await prisma.document.findFirst({
       where: {
         userId,
         content,
         title: fileName
       }
     });
+
+    if (!doc) return null;
+
+    return {
+      ...doc,
+      metadata: doc.metadata as Document['metadata']
+    } as Document;
   } catch (error) {
     console.error('Error checking existing document:', error);
     return null;
@@ -74,14 +82,23 @@ async function checkExistingDocument(
 
 // Add this helper function for type safety
 function sanitizeMetadata(metadata: any): DocumentMetadata {
-  return {
+  const sanitized: DocumentMetadata = {
     size: Number(metadata.size) || 0,
     lastModified: Number(metadata.lastModified) || Date.now(),
     fileType: String(metadata.fileType) || '',
     processingTimestamp: new Date().toISOString(),
-    previousVersions: Array.isArray(metadata.previousVersions) ? metadata.previousVersions : [],
-    ...(metadata.embeddingDimension && { embeddingDimension: Number(metadata.embeddingDimension) })
+    previousVersions: Array.isArray(metadata.previousVersions) 
+      ? metadata.previousVersions.map((v: any) => ({
+          version: Number(v.version),
+          updatedAt: new Date(v.updatedAt)
+        }))
+      : [],
+    ...(metadata.embeddingDimension && { 
+      embeddingDimension: Number(metadata.embeddingDimension) 
+    })
   };
+
+  return sanitized;
 }
 
 export async function processDocument(
@@ -115,11 +132,11 @@ export async function processDocument(
 
 
     if (existingDocument) {
-      // Update existing document with new version
-      const updatedMetadata: DocumentMetadata = sanitizeMetadata({
-        ...existingDocument.metadata,
+      const currentMetadata = existingDocument.metadata as DocumentMetadata;
+      const updatedMetadata = sanitizeMetadata({
+        ...currentMetadata,
         previousVersions: [
-          ...(existingDocument.metadata?.previousVersions || []),
+          ...(currentMetadata?.previousVersions || []),
           {
             version: existingDocument.version,
             updatedAt: existingDocument.updatedAt
@@ -129,20 +146,20 @@ export async function processDocument(
         size: file.size,
         processingTimestamp: new Date().toISOString()
       });
-
+    
       const updatedDocument = await prisma.document.update({
         where: { id: existingDocument.id },
         data: {
           version: existingDocument.version + 1,
           updatedAt: new Date(),
-          metadata: updatedMetadata
+          metadata: updatedMetadata as any // Type assertion to satisfy Prisma
         }
       });
-
+    
       return {
         ...updatedDocument,
-        metadata: sanitizeMetadata(updatedDocument.metadata)
-      };
+        metadata: updatedMetadata
+      } as Document;
     }
 
 
@@ -174,7 +191,7 @@ export async function processDocument(
     }
 
     // Store document in Prisma with proper metadata
-    const newDocumentMetadata: DocumentMetadata = sanitizeMetadata({
+    const newDocumentMetadata = sanitizeMetadata({
       size: file.size,
       lastModified: file.lastModified,
       fileType: file.type,
@@ -182,14 +199,14 @@ export async function processDocument(
       processingTimestamp: new Date().toISOString(),
       previousVersions: []
     });
-
+    
     const document = await prisma.document.create({
       data: {
         userId,
         title: file.name,
         content: content.slice(0, 1000000),
         fileType: file.type,
-        metadata: newDocumentMetadata,
+        metadata: newDocumentMetadata as any, // Type assertion to satisfy Prisma
         version: 1,
         vectorId: null
       },
