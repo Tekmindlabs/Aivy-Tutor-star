@@ -10,6 +10,7 @@ export class KnowledgeService {
     try {
       // Generate embedding for document content
       const embedding = await getEmbedding(document.content);
+      console.log('Generated embedding:', embedding?.length);
       
       // Insert vector into Milvus
       const vectorResult = await insertVector({

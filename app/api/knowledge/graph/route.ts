@@ -11,17 +11,25 @@ const knowledgeService = new KnowledgeService();
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    console.log('Session user:', session?.user?.id);
+
     if (!session?.user?.id) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.log('Fetching graph data for user:', session.user.id);
+    const client = await getMilvusClient();
+    const contentCount = await client.count('content', `user_id == "${session.user.id}"`);
+    console.log('Milvus content count:', contentCount);
+
     const graphData = await knowledgeService.getKnowledgeGraph(session.user.id);
+    console.log('Graph data retrieved:', {
+      nodeCount: graphData.nodes.length,
+      relationshipCount: graphData.relationships.length
+    });
     
     return Response.json(graphData);
   } catch (error) {
     console.error('Error fetching graph data:', error);
-    handleMilvusError(error);
     return Response.json({ error: "Failed to fetch graph data" }, { status: 500 });
   }
 }

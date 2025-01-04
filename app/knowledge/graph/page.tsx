@@ -28,18 +28,25 @@ export default function KnowledgeGraphPage() {
       setIsLoading(true);
       setError(null);
       
+      console.log('Fetching graph data...');
       const response = await fetch('/api/knowledge/graph');
+      console.log('Graph API response status:', response.status);
       
       if (!response.ok) {
-        throw new Error(`Failed to fetch graph data: ${response.statusText}`);
+        throw new Error(`API request failed with status ${response.status}`);
       }
       
       const data = await response.json();
+      console.log('Graph data received:', {
+        nodeCount: data.nodes?.length,
+        relationshipCount: data.relationships?.length
+      });
       
       if (!Array.isArray(data.nodes) || !Array.isArray(data.relationships)) {
+        console.warn('Invalid graph data structure:', data);
         throw new Error('Invalid data structure received from API');
       }
-
+  
       setGraphData({
         nodes: data.nodes,
         relationships: data.relationships

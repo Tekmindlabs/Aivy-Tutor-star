@@ -101,11 +101,23 @@ function sanitizeMetadata(metadata: any): DocumentMetadata {
   return sanitized;
 }
 
-export async function processDocument(
-  file: File,
-  userId: string
-): Promise<Document> {
+export async function processDocument(file: File, userId: string): Promise<Document> {
+
   try {
+
+    // Log initial document processing
+
+    console.log('Starting document processing:', {
+
+      fileName: file.name,
+
+      fileType: file.type,
+
+      fileSize: file.size,
+
+      userId
+
+    });
     // Validate user
     const user = await prisma.user.findUnique({
       where: { id: userId }

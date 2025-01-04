@@ -2,7 +2,9 @@ import { getMilvusClient } from './client';
 import { v4 as uuidv4 } from 'uuid';
 import { VectorResult } from '../knowledge/types';
 
-// In /lib/milvus/vectors.ts
+/**
+ * Inserts a vector into the Milvus database with enhanced logging and error handling
+ */
 export async function insertVector({
   userId,
   contentType,
@@ -16,38 +18,84 @@ export async function insertVector({
   embedding: number[];
   metadata?: Record<string, any>;
 }): Promise<VectorResult> {
-  const client = await getMilvusClient();
-  
-  // Verify embedding dimension
-  if (embedding.length !== 1024) {
+  try {
+    // Initial logging of vector insertion attempt
+    console.log('Starting vector insertion:', {
+      userId,
+      contentType,
+      contentId,
+      embeddingDimension: embedding.length,
+      metadataKeys: Object.keys(metadata)
+    });
 
-    throw new Error('Invalid embedding dimension');
-  
-  }
+    // Get Milvus client
+    const client = await getMilvusClient();
+    console.log('Milvus client connected successfully');
 
-  const vectorId = uuidv4();
-  
-  await client.insert({
-    collection_name: 'content_vectors',
-    data: [{
+    // Verify embedding dimension
+    if (embedding.length !== 1024) {
+      const error = new Error(`Invalid embedding dimension: ${embedding.length}, expected 1024`);
+      console.error('Embedding dimension validation failed:', error);
+      throw error;
+    }
+
+    // Generate vector ID
+    const vectorId = uuidv4();
+    console.log('Generated vector ID:', vectorId);
+
+    // Prepare insertion data
+    const insertData = {
       id: vectorId,
       user_id: userId,
       content_type: contentType,
       content_id: contentId,
       embedding: embedding,
       metadata: JSON.stringify(metadata)
-    }]
-  });
+    };
 
-  return {
-    id: vectorId,
-    user_id: userId,
-    content_type: contentType,
-    content_id: contentId,
-    metadata: JSON.stringify(metadata)
-  };
+    console.log('Preparing to insert vector data:', {
+      vectorId,
+      userId,
+      contentType,
+      contentId,
+      metadataSize: JSON.stringify(metadata).length
+    });
+
+    // Perform insertion
+    const insertResult = await client.insert({
+      collection_name: 'content_vectors',
+      data: [insertData]
+    });
+
+    console.log('Vector inserted successfully:', {
+      vectorId,
+      status: insertResult.status,
+      timestamp: new Date().toISOString()
+    });
+
+    // Return vector result
+    return {
+      id: vectorId,
+      user_id: userId,
+      content_type: contentType,
+      content_id: contentId,
+      metadata: JSON.stringify(metadata)
+    };
+
+  } catch (error) {
+    console.error('Vector insertion failed:', {
+      error: error.message,
+      userId,
+      contentId,
+      timestamp: new Date().toISOString()
+    });
+    throw error;
+  }
 }
 
+/**
+ * Searches for similar content in the Milvus database with enhanced logging
+ */
 export async function searchSimilarContent({
   userId,
   embedding,
@@ -59,19 +107,72 @@ export async function searchSimilarContent({
   limit?: number;
   contentTypes?: string[];
 }) {
-  const client = await getMilvusClient();
+  try {
+    console.log('Starting similarity search:', {
+      userId,
+      embeddingDimension: embedding.length,
+      limit,
+      contentTypes
+    });
 
-  const results = await client.search({
-    collection_name: 'content_vectors',
-    vector: embedding,
-    filter: `user_id == "${userId}" && content_type in ${JSON.stringify(contentTypes)}`,
-    limit,
-    output_fields: ['content_type', 'content_id', 'metadata'],
-    params: { 
-      nprobe: 10,
-      metric_type: 'L2' // or 'COSINE' depending on your needs
+    // Get Milvus client
+    const client = await getMilvusClient();
+    console.log('Milvus client connected for search');
+
+    // Verify embedding dimension
+    if (embedding.length !== 1024) {
+      const error = new Error(`Invalid search embedding dimension: ${embedding.length}`);
+      console.error('Search embedding validation failed:', error);
+      throw error;
     }
-  });
 
-  return results;
+    // Prepare search filter
+    const filter = `user_id == "${userId}" && content_type in ${JSON.stringify(contentTypes)}`;
+    console.log('Applying search filter:', filter);
+
+    // Perform search
+    const results = await client.search({
+      collection_name: 'content_vectors',
+      vector: embedding,
+      filter: filter,
+      limit,
+      output_fields: ['content_type', 'content_id', 'metadata'],
+      params: { 
+        nprobe: 10,
+        metric_type: 'L2'
+      }
+    });
+
+    console.log('Search completed successfully:', {
+      resultCount: results.length,
+      timestamp: new Date().toISOString()
+    });
+
+    return results;
+
+  } catch (error) {
+    console.error('Similarity search failed:', {
+      error: error.message,
+      userId,
+      timestamp: new Date().toISOString()
+    });
+    throw error;
+  }
+}
+
+/**
+ * Utility function to validate embedding dimension
+ */
+function validateEmbedding(embedding: number[]): boolean {
+  if (!Array.isArray(embedding)) {
+    console.error('Invalid embedding format: not an array');
+    return false;
+  }
+  
+  if (embedding.length !== 1024) {
+    console.error(`Invalid embedding dimension: ${embedding.length}`);
+    return false;
+  }
+  
+  return true;
 }
