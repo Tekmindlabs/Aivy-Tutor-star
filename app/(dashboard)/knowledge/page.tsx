@@ -14,11 +14,12 @@ export default function KnowledgeBasePage() {
 
   return (
     <div className="container mx-auto max-w-6xl">
+      {/* Header Section */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-bold">Knowledge Base</h1>
           <div className="flex gap-4">
-            <UploadButton />
+            <UploadButton /> {/* This is your document uploader */}
             <Button variant="outline">
               <BookOpen className="h-4 w-4 mr-2" />
               New Note
@@ -26,10 +27,12 @@ export default function KnowledgeBasePage() {
           </div>
         </div>
 
+        {/* URL Input Section */}
         <Card className="p-4 mb-8">
           <URLInput />
         </Card>
 
+        {/* Search Section */}
         <div className="flex gap-4 mb-8">
           <Input
             value={searchQuery}
@@ -40,6 +43,7 @@ export default function KnowledgeBasePage() {
           <Button>Search</Button>
         </div>
 
+        {/* Documents List Section */}
         <Tabs defaultValue="all">
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
@@ -50,6 +54,7 @@ export default function KnowledgeBasePage() {
 
           <TabsContent value="all" className="mt-6">
             <div className="grid gap-4 md:grid-cols-2">
+              {/* This is where your documents will be displayed */}
               {[1, 2, 3, 4].map((i) => (
                 <Card key={i} className="p-4">
                   <div className="flex items-start gap-4">

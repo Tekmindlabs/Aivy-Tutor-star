@@ -5,7 +5,7 @@ export interface Document {
   content: string;
   userId: string;
   vectorId: string | null;
-  metadata: Record<string, any>;
+  metadata: Record<string, any> | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;

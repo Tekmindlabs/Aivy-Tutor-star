@@ -10,6 +10,14 @@ export async function POST(req: NextRequest) {
       return new Response("Unauthorized", { status: 401 });
     }
 
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id }
+    });
+
+    if (!user) {
+      return new Response("User not found", { status: 404 });
+    }
+
     const formData = await req.formData();
     const file = formData.get("file") as File;
     
@@ -19,9 +27,16 @@ export async function POST(req: NextRequest) {
 
     const document = await processDocument(file, session.user.id);
     
-    return Response.json(document);
+    return Response.json({
+      success: true,
+      document,
+      message: "Document uploaded successfully"
+    });
   } catch (error) {
     console.error("Upload error:", error);
-    return new Response("Internal error", { status: 500 });
+    return Response.json({
+      success: false,
+      error: "Failed to upload document"
+    }, { status: 500 });
   }
 }

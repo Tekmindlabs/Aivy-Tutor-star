@@ -59,8 +59,10 @@ export async function processDocument(
 
       embedding = Array.from(embeddingFloat32);
       
-      if (embedding.length !== 768) {
-        throw new DocumentProcessingError(`Invalid embedding dimension: ${embedding.length}, expected 768`);
+      if (embedding.length !== 1024) { // Change from 768 to 1024
+
+        throw new DocumentProcessingError(`Invalid embedding dimension: ${embedding.length}, expected 1024`);
+      
       }
 
       console.log('Document embedding generated successfully:', embedding.length);
@@ -122,7 +124,7 @@ export async function processDocument(
         userId: updatedDocument.userId,
         vectorId: updatedDocument.vectorId,
         fileType: updatedDocument.fileType,
-        metadata: updatedDocument.metadata,
+        metadata: updatedDocument.metadata || {},
         version: updatedDocument.version,
         createdAt: updatedDocument.createdAt,
         updatedAt: updatedDocument.updatedAt

@@ -1,4 +1,4 @@
-import { JinaEmbeddings } from 'langchain/embeddings/jina';
+import { JinaEmbeddings } from '@langchain/community/embeddings/jina';
 
 // Custom error types
 class TensorConversionError extends Error {
@@ -29,8 +29,8 @@ export class EmbeddingModel {
 
       // Initialize Jina embeddings with your API key
       this.embeddings = new JinaEmbeddings({
-        jinaApiKey: process.env.JINA_API_KEY, // Make sure to add this to your .env file
-        modelName: 'jina-embeddings-v3-base-en', // or your preferred model
+        apiKey: process.env.JINA_API_KEY,
+        modelName: 'jina-embeddings-v3-base-en',
         apiUrl: 'https://api.jina.ai/v1/embeddings'
       });
 
