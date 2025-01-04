@@ -77,4 +77,5 @@ export interface VectorResult {
   content_type: string;
   content_id: string;
   metadata: string;
+  score?: number;
 }

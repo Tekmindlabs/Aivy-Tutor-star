@@ -4,6 +4,15 @@ import { Document, Note, URL, Vector, VectorResult } from '@/lib/knowledge/types
 import { handleMilvusError } from '@/lib/milvus/error-handler';
 import { createRelationship, findRelatedContent } from '@/lib/milvus/knowledge-graph';
 import { getMilvusClient } from '@/lib/milvus/client';
+import { prisma } from '@/lib/prisma';
+
+// Transform relationships into edges
+interface RelationshipResult {
+  source_id: string;
+  target_id: string;
+  relationship_type: string;
+  metadata: string;
+}
 
 interface GraphNode {
   id: string;
@@ -79,6 +88,73 @@ export class KnowledgeService {
     }
   }
 
+  async deleteDocument(userId: string, documentId: string): Promise<void> {
+    try {
+      console.log('🗑️ Starting document deletion process:', {
+        userId,
+        documentId
+      });
+  
+      // 1. Get the document to verify ownership and get vectorId
+      const document = await prisma.document.findFirst({
+        where: {
+          id: documentId,
+          userId: userId
+        }
+      });
+  
+      if (!document) {
+        console.log('❌ Document not found or unauthorized');
+        throw new Error('Document not found or unauthorized');
+      }
+  
+      console.log('📄 Found document:', {
+        documentId: document.id,
+        vectorId: document.vectorId
+      });
+  
+      // 2. Delete vector from Milvus if it exists
+      if (document.vectorId) {
+        const client = await getMilvusClient();
+        await client.deleteEntities({
+          collection_name: 'content',
+          expr: `id in [${document.vectorId}]`
+        });
+        console.log('🗑️ Deleted vector from Milvus:', document.vectorId);
+      }
+  
+      // 3. Delete relationships from knowledge graph
+      const relationshipResults = await findRelatedContent({
+        userId,
+        contentId: documentId,
+        maxDepth: 1,
+        relationshipTypes: ['related', 'references', 'similar_to']
+      });
+  
+      if (relationshipResults.data && relationshipResults.data.length > 0) {
+        const client = await getMilvusClient();
+        await client.deleteEntities({
+          collection_name: 'relationships',
+          expr: `source_id == "${documentId}" || target_id == "${documentId}"`
+        });
+        console.log('🔗 Deleted relationships from knowledge graph');
+      }
+  
+      // 4. Delete document from database
+      await prisma.document.delete({
+        where: {
+          id: documentId
+        }
+      });
+  
+      console.log('✅ Document successfully deleted:', documentId);
+    } catch (error) {
+      console.error('❌ Error deleting document:', error);
+      handleMilvusError(error);
+      throw error;
+    }
+  }
+
   async getKnowledgeGraph(userId: string): Promise<GraphData> {
     try {
       const client = await getMilvusClient();
@@ -97,7 +173,7 @@ export class KnowledgeService {
       }
 
       // Transform content into nodes
-      const nodes: GraphNode[] = contentResults.data.map(content => ({
+      const nodes: GraphNode[] = contentResults.data.map((content: VectorResult) => ({
         id: content.content_id,
         type: content.content_type,
         label: this.parseMetadata(content.metadata).title || content.content_id,
@@ -115,9 +191,9 @@ export class KnowledgeService {
         maxDepth: 3,
         relationshipTypes: ['related', 'references']
       });
-
-      // Transform relationships into edges
-      const relationships: GraphEdge[] = relationshipResults.data.map(rel => ({
+      
+      // Then use it in the map function:
+      const relationships: GraphEdge[] = relationshipResults.data.map((rel: RelationshipResult) => ({
         source: rel.source_id,
         target: rel.target_id,
         type: rel.relationship_type,

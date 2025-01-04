@@ -170,12 +170,16 @@ export class KnowledgeService {
       }
 
       // Transform content into nodes
-      const nodes: GraphNode[] = contentResults.data.map(content => ({
-        id: content.content_id,
-        type: content.content_type,
-        label: this.parseMetadata(content.metadata).title || content.content_id,
-        metadata: this.parseMetadata(content.metadata)
-      }));
+const nodes: GraphNode[] = contentResults.data.map((content: {
+  content_id: string;
+  content_type: string;
+  metadata: string;
+}) => ({
+  id: content.content_id,
+  type: content.content_type,
+  label: this.parseMetadata(content.metadata).title || content.content_id,
+  metadata: this.parseMetadata(content.metadata)
+}));
 
       if (nodes.length === 0) {
         return { nodes: [], relationships: [] };
@@ -185,12 +189,17 @@ export class KnowledgeService {
       const relationships = await this.getRelationships(userId, nodes[0]?.id);
 
       // Transform relationships into edges
-      const edges: GraphEdge[] = relationships.map(rel => ({
-        source: rel.source_id,
-        target: rel.target_id,
-        type: rel.relationship_type,
-        metadata: this.parseMetadata(rel.metadata)
-      }));
+const edges: GraphEdge[] = relationships.map((rel: {
+  source_id: string;
+  target_id: string;
+  relationship_type: string;
+  metadata: string;
+}) => ({
+  source: rel.source_id,
+  target: rel.target_id,
+  type: rel.relationship_type,
+  metadata: this.parseMetadata(rel.metadata)
+}));
 
       console.log('Graph data retrieved:', {
         nodeCount: nodes.length,

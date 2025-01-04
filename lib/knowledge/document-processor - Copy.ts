@@ -102,13 +102,16 @@ function sanitizeMetadata(metadata: any): DocumentMetadata {
 }
 
 export async function processDocument(file: File, userId: string): Promise<Document> {
+
   try {
-    console.log('🚀 Starting document processing:', {
+
+    // Log initial document processing
+
+    console.log('Starting document processing:', {
       fileName: file.name,
       fileType: file.type,
       fileSize: file.size,
-      userId,
-      timestamp: new Date().toISOString()
+      userId
     });
     
     // Validate user
@@ -130,10 +133,6 @@ export async function processDocument(file: File, userId: string): Promise<Docum
 
     // Extract text content with chunking if needed
     const content = await extractText(file);
-    console.log('📄 Text extraction completed:', {
-      contentLength: content.length,
-      firstChars: content.substring(0, 100) + '...'
-    });
     if (!content || content.trim().length === 0) {
       throw new DocumentProcessingError('No content could be extracted from the file');
     }
@@ -177,25 +176,23 @@ export async function processDocument(file: File, userId: string): Promise<Docum
     let embedding: number[];
 
     try {
-      console.log('🔄 Starting embedding generation for document...');
+      console.log('Generating embedding for document...');
       const embeddingFloat32 = await getEmbedding(content);
       
-      console.log('✨ Raw embedding generated:', {
-        type: embeddingFloat32.constructor.name,
-        length: embeddingFloat32.length
-      });
-      
+      // Validate embedding
+      if (!(embeddingFloat32 instanceof Float32Array)) {
+        throw new DocumentProcessingError('Invalid embedding format: expected Float32Array');
+      }
+
       embedding = Array.from(embeddingFloat32);
       
-      console.log('✅ Embedding processed successfully:', {
-        dimension: embedding.length,
-        sampleValues: embedding.slice(0, 3)
-      });
+      if (embedding.length !== 1024) {
+        throw new DocumentProcessingError(`Invalid embedding dimension: ${embedding.length}, expected 1024`);
+      }
+
+      console.log('Document embedding generated successfully:', embedding.length);
     } catch (error) {
-      console.error('❌ Error generating embedding:', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
+      console.error('Error generating embedding:', error);
       throw new DocumentProcessingError(
         `Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
@@ -222,11 +219,6 @@ export async function processDocument(file: File, userId: string): Promise<Docum
         vectorId: null
       },
     });
-    console.log('💾 Document stored in database:', {
-      documentId: document.id,
-      title: document.title,
-      version: document.version
-    });
 
     // Store vector in Milvus with validation
     try {
@@ -240,10 +232,6 @@ export async function processDocument(file: File, userId: string): Promise<Docum
           fileType: file.type,
           documentId: document.id
         }
-      });
-      console.log('🔵 Vector stored in Milvus:', {
-        vectorId: vectorResult.id,
-        documentId: document.id
       });
 
       // Update document with vector ID
@@ -303,9 +291,7 @@ async function extractText(file: File): Promise<string> {
 
 async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
   try {
-    console.log('📑 Starting PDF text extraction');
     const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-    console.log(`📄 Processing PDF with ${pdf.numPages} pages`);
     let text = '';
 
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -313,10 +299,9 @@ async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
       const content = await page.getTextContent();
       text += content.items.map((item: any) => item.str).join(' ') + '\n';
     }
-    console.log('✅ PDF text extraction completed');
+
     return text.trim();
   } catch (error) {
-    console.error('❌ PDF extraction error:', error);
     throw new TextExtractionError(
       `Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
@@ -351,22 +336,19 @@ async function createDocumentRelationships(
   userId: string
 ): Promise<void> {
   try {
-    console.log('🔍 Starting relationship creation for document:', { documentId });
-    
     const embeddingFloat32 = await getEmbedding(content);
-    console.log('✅ Relationship embedding generated');
+    
+    if (!(embeddingFloat32 instanceof Float32Array)) {
+      throw new Error('Invalid embedding format for relationship creation');
+    }
+    
+    const embedding = Array.from(embeddingFloat32);
     
     const similar = await searchSimilarContent({
       userId,
-      embedding: Array.from(embeddingFloat32),
+      embedding,
       limit: 3,
       contentTypes: ['document']
-    });
-    
-    console.log('🔎 Similar documents found:', {
-      count: Array.isArray(similar) ? similar.length : 0,
-      documents: Array.isArray(similar) ? 
-        similar.map(s => ({ id: s.content_id, score: s.score })) : []
     });
 
     // Add validation to ensure similar is an array
@@ -392,14 +374,7 @@ async function createDocumentRelationships(
     });
 
     await Promise.all(relationshipPromises.filter(Boolean));
-    
-    // After relationships are created
-    console.log('🔗 Document relationships created successfully');
   } catch (error) {
-    console.error('❌ Error creating relationships:', {
-      documentId,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
     throw new Error(
       `Failed to create document relationships: ${error instanceof Error ? error.message : 'Unknown error'}`
     );
