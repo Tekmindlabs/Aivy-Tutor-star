@@ -1,12 +1,55 @@
-// /lib/services/knowledge-service.ts
-
 import { getEmbedding } from '@/lib/knowledge/embeddings';
 import { insertVector, searchSimilarContent } from '@/lib/milvus/vectors';
-import { Document, Note, URL, Vector } from '@/lib/knowledge/types';
+import { Document, Note, URL, Vector, VectorResult } from '@/lib/knowledge/types';
 import { handleMilvusError } from '@/lib/milvus/error-handler';
-import { createRelationship } from '@/lib/milvus/knowledge-graph';
+import { createRelationship, findRelatedContent } from '@/lib/milvus/knowledge-graph';
+import { getMilvusClient } from '@/lib/milvus/client';
 
 export class KnowledgeService {
+  async getKnowledgeGraph(userId: string) {
+    try {
+      if (!userId) {
+        throw new Error('User ID is required');
+      }
+
+      const client = await getMilvusClient();
+      
+      const contentResults = await client.query({
+        collection_name: 'content_vectors',
+        filter: `user_id == "${userId}"`,
+        output_fields: ['id', 'content_type', 'content_id', 'metadata']
+      });
+
+      const nodes = contentResults.map((content: VectorResult) => ({
+        id: content.content_id,
+        type: content.content_type,
+        metadata: JSON.parse(content.metadata)
+      }));
+
+      const relationships = await findRelatedContent({
+        userId,
+        contentId: nodes[0]?.id || '',
+        maxDepth: 3,
+        relationshipTypes: []
+      });
+
+      const edges = relationships.map(rel => ({
+        source: rel.source_id,
+        target: rel.target_id,
+        type: rel.relationship_type,
+        metadata: JSON.parse(rel.metadata)
+      }));
+
+      return {
+        nodes,
+        edges
+      };
+    } catch (error) {
+      handleMilvusError(error);
+      throw error;
+    }
+  }
+
   async addDocument(userId: string, document: Document): Promise<void> {
     try {
       const embedding = await getEmbedding(document.content);
@@ -15,7 +58,7 @@ export class KnowledgeService {
         userId,
         contentType: 'document',
         contentId: document.id,
-        embedding: Array.from(embedding), // Convert Float32Array to number[]
+        embedding: Array.from(embedding),
         metadata: {
           title: document.title,
           fileType: document.fileType,
@@ -32,7 +75,7 @@ export class KnowledgeService {
       const embedding = await getEmbedding(query);
       const results = await searchSimilarContent({
         userId,
-        embedding: Array.from(embedding), // Convert Float32Array to number[]
+        embedding: Array.from(embedding),
         limit: 5,
         contentTypes: ['document', 'note', 'url']
       });
@@ -50,7 +93,7 @@ export class KnowledgeService {
         userId,
         contentType: 'note',
         contentId: note.id,
-        embedding: Array.from(embedding), // Convert Float32Array to number[]
+        embedding: Array.from(embedding),
         metadata: {
           title: note.title,
           tags: note.tags,
@@ -69,7 +112,7 @@ export class KnowledgeService {
         userId,
         contentType: 'url',
         contentId: url.id,
-        embedding: Array.from(embedding), // Convert Float32Array to number[]
+        embedding: Array.from(embedding),
         metadata: {
           url: url.url,
           title: url.title,
@@ -88,12 +131,10 @@ export class KnowledgeService {
     type: string
   ): Promise<void> {
     try {
-      // Input validation
       if (!userId || !sourceId || !targetId || !type) {
         throw new Error('Missing required parameters for relationship creation');
       }
 
-      // Create relationship in the knowledge graph
       await createRelationship({
         userId,
         sourceId,
@@ -104,7 +145,6 @@ export class KnowledgeService {
           relationshipType: type
         }
       });
-
     } catch (error) {
       handleMilvusError(error);
       throw error;

@@ -1,13 +1,12 @@
-// /lib/services/knowledge-graph.ts
 import { getMilvusClient } from '../milvus/client';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface GraphNode {
   id: string;
-  userId: string;
   label: string;
   type: string;
-  metadata: Record<string, any>;
+  userId: string;
+  metadata?: Record<string, any>;
 }
 
 export interface GraphRelationship {
@@ -16,7 +15,15 @@ export interface GraphRelationship {
   sourceId: string;
   targetId: string;
   relationshipType: string;
-  metadata: Record<string, any>;
+  metadata?: Record<string, any>;
+}
+
+interface MilvusRelationship {
+  id: string;
+  source_id: string;
+  target_id: string;
+  relationship_type: string;
+  metadata: string;
 }
 
 export class KnowledgeGraphService {
@@ -58,10 +65,10 @@ export class KnowledgeGraphService {
     contentId: string;
     relationshipTypes?: string[];
     maxDepth?: number;
-  }) {
+  }): Promise<MilvusRelationship[]> {
     const client = await getMilvusClient();
     const visited = new Set<string>();
-    const results = [];
+    const results: MilvusRelationship[] = [];
 
     async function traverse(currentId: string, depth: number) {
       if (depth > maxDepth || visited.has(currentId)) return;
@@ -92,7 +99,7 @@ export class KnowledgeGraphService {
   async getGraphData(userId: string) {
     const client = await getMilvusClient();
     
-    const relationships = await client.query({
+    const relationships: MilvusRelationship[] = await client.query({
       collection_name: 'knowledge_graph',
       filter: `user_id == "${userId}"`,
       output_fields: ['id', 'source_id', 'target_id', 'relationship_type', 'metadata']
@@ -104,20 +111,24 @@ export class KnowledgeGraphService {
     };
   }
 
-  private extractNodesFromRelationships(relationships: any[]) {
-    const nodesMap = new Map();
+  private extractNodesFromRelationships(relationships: MilvusRelationship[]): GraphNode[] {
+    const nodesMap = new Map<string, GraphNode>();
     
     relationships.forEach(rel => {
       if (!nodesMap.has(rel.source_id)) {
         nodesMap.set(rel.source_id, {
           id: rel.source_id,
-          label: rel.metadata?.sourceLabel || rel.source_id
+          label: JSON.parse(rel.metadata)?.sourceLabel || rel.source_id,
+          type: 'node',
+          userId: '',
         });
       }
       if (!nodesMap.has(rel.target_id)) {
         nodesMap.set(rel.target_id, {
           id: rel.target_id,
-          label: rel.metadata?.targetLabel || rel.target_id
+          label: JSON.parse(rel.metadata)?.targetLabel || rel.target_id,
+          type: 'node',
+          userId: '',
         });
       }
     });
@@ -125,12 +136,13 @@ export class KnowledgeGraphService {
     return Array.from(nodesMap.values());
   }
 
-  private formatRelationship(rel: any) {
+  private formatRelationship(rel: MilvusRelationship): GraphRelationship {
     return {
       id: rel.id,
-      source: rel.source_id,
-      target: rel.target_id,
-      type: rel.relationship_type,
+      userId: '',
+      sourceId: rel.source_id,
+      targetId: rel.target_id,
+      relationshipType: rel.relationship_type,
       metadata: JSON.parse(rel.metadata)
     };
   }
