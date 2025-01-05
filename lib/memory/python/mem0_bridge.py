@@ -1,6 +1,6 @@
 import sys
 import json
-from mem0ai import Memory  # Keep using Memory instead of Mem0AI to match existing codebase
+from mem0ai import Mem0AI
 import logging
 
 # Configure logging
@@ -33,8 +33,7 @@ class Mem0Bridge:
                     }
                 }
             }
-            self.memory = Memory.from_config(self.config)
-            logger.info("Memory system initialized successfully")
+            self.memory = Mem0AI.from_config(self.config)  # Use Mem0AI here            logger.info("Memory system initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Memory system: {str(e)}")
             self.memory = None
@@ -64,7 +63,7 @@ class Mem0Bridge:
             results = self.memory.search(query, user_id)
             return json.dumps({
                 "success": True,
-                "results": results.results[:limit]
+                "results": results["results"][:limit]  # Access results from dictionary
             })
         except Exception as e:
             logger.error(f"Search error: {str(e)}")

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "powershell -Command \"if (!(Test-Path .next\\proto\\proto)) { New-Item -ItemType Directory -Path .next\\proto\\proto -Force }; Copy-Item -Path public\\proto\\* -Destination .next\\proto\\proto -Recurse -Force\" && next dev",
+    "dev": "powershell -Command \"if (!(Test-Path .next\\proto\\proto)) { New-Item -ItemType Directory -Path .next\\proto\\proto -Force }; Copy-Item -Path public\\proto\\* -Destination .next\\proto\\proto -Recurse -Force\" && npx ts-node scripts/test-bridge.ts && next dev",
     "build": "mkdir -p .next/proto/proto && xcopy /S /I public\\proto\\* .next\\proto\\proto\\ && next build",
     "start": "next start",
     "lint": "next lint",
@@ -86,6 +86,7 @@
     "stream-http": "^3.2.0",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }
 }
