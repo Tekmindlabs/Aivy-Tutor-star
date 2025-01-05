@@ -190,19 +190,19 @@ const relevantMemories = await memoryService.searchMemories(
 
         // Step 5: Store interaction
         // Step 5: Store interaction
-const memoryEntry = {
-  messages: state.messages.map(msg => ({
-    id: crypto.randomUUID(), // Add unique ID for each message
-    content: msg.content,
-    role: msg.role,
-    createdAt: new Date().toISOString()
-  })),
-  metadata: {
-    emotionalState: emotionalAnalysis.emotionalState,
-    context: state.context,
-    reactStep
-  }
-};
+        const memoryEntry = {
+          messages: state.messages.map(msg => ({
+            id: crypto.randomUUID(),
+            content: msg.content,
+            role: msg.role,
+            createdAt: new Date() // Create a Date object directly instead of string
+          })),
+          metadata: {
+            emotionalState: emotionalAnalysis.emotionalState,
+            context: state.context,
+            reactStep
+          }
+        };
 
 await memoryService.addMemory(
   memoryEntry.messages,

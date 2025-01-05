@@ -1,4 +1,4 @@
-import { PythonShell } from 'python-shell';
+import { PythonShell, Options } from 'python-shell'; // Added Options type import
 import path from 'path';
 
 export class Mem0Bridge {
@@ -9,14 +9,13 @@ export class Mem0Bridge {
   }
 
   private async runPythonCommand(command: string, args: any): Promise<any> {
-    const options = {
-      mode: 'text',
+    const options: Options = { // Added type annotation
+      mode: 'text' as const, // Added "as const" to specify literal type
       pythonPath: 'python3',
       args: [command, JSON.stringify(args)]
     };
 
     return new Promise((resolve, reject) => {
-      // Correct usage with 2 arguments: script path and options
       PythonShell.run(this.pythonPath, options)
         .then(results => {
           try {

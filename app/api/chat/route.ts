@@ -129,21 +129,41 @@ export async function POST(req: NextRequest) {
     }
 
     // Search memories
-    currentStep = STEPS.MEMORY_SEARCH;
-    const lastMessage = messages[messages.length - 1];
-    const relevantMemories = await memoryService.searchMemories(
-      lastMessage.content,
-      user.id,
-      5
-    ).catch(error => {
-      console.warn('Memory search failed:', error);
-      return [];
-    });
+    // Search memories
+currentStep = STEPS.MEMORY_SEARCH;
+const lastMessage = messages[messages.length - 1];
+const relevantMemories = await memoryService.searchMemories(
+  lastMessage.content,
+  user.id,
+  5
+).then(entries => entries.map(entry => {
+  // Get the last message from the memory entry
+  const lastMemoryMessage = entry.messages[entry.messages.length - 1];
+  
+  return {
+    id: entry.id,
+    content: lastMemoryMessage?.content || '',
+    emotionalState: entry.metadata?.emotionalState || {
+      mood: "neutral",
+      confidence: "medium"
+    },
+    timestamp: entry.timestamp,
+    userId: entry.userId,
+    metadata: {
+      learningStyle: entry.metadata?.learningStyle,
+      difficulty: entry.metadata?.difficultyPreference,
+      interests: entry.metadata?.interests
+    }
+  };
+})).catch(error => {
+  console.warn('Memory search failed:', error);
+  return [];
+});
 
-    // Format memory context
-    const memoryContext = relevantMemories
-      .map(memory => `Previous interaction: ${memory.messages[memory.messages.length - 1].content}`)
-      .join('\n');
+// Format memory context (update this part too)
+const memoryContext = relevantMemories
+  .map(memory => `Previous interaction: ${memory.content}`)
+  .join('\n');
 
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
     const { stream, handlers } = LangChainStream({
