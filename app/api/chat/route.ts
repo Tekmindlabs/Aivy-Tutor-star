@@ -203,9 +203,10 @@ export async function POST(req: NextRequest) {
       )
     ]);
 
-    const finalResponse = personalizedResponse.response.text()
-    .replace(/^\d+:/, '') // Remove any numeric prefixes
-    .trim();
+const finalResponse = personalizedResponse.response.text()
+.replace(/^\d+:/, '') // Remove numeric prefix
+.replace(/\\n/g, '\n') // Replace escaped newlines
+.trim();
     
     // Store chat in database without blocking
     prisma.chat.create({

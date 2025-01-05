@@ -96,3 +96,31 @@
   width: 100%;
   height: 100%;
 }
+
+/* Add to your global CSS or component styles */
+.prose {
+  @apply text-base leading-7;
+}
+
+.prose p {
+  @apply mb-4;
+}
+
+.prose h1,
+.prose h2,
+.prose h3 {
+  @apply font-bold mb-4;
+}
+
+.prose ul,
+.prose ol {
+  @apply mb-4 ml-6;
+}
+
+.prose ul {
+  @apply list-disc;
+}
+
+.prose ol {
+  @apply list-decimal;
+}
