@@ -1,4 +1,4 @@
-import { Memory } from 'mem0';
+import { Mem0Bridge } from './bridge';
 import { Message } from '@/types/chat';
 import { VectorResult } from '@/lib/knowledge/types';
 import { getEmbedding } from '@/lib/knowledge/embeddings';
@@ -13,43 +13,24 @@ interface MemoryEntry {
   timestamp: Date;
 }
 
+interface Mem0Result {
+  metadata?: {      
+    messageId?: string;    
+    messages?: string;   
+    [key: string]: any;      
+  };     
+  user_id: string;     
+  created_at: string;     
+}
+
 export class MemoryService {
-  private mem0: Memory;
+  private mem0Bridge: Mem0Bridge;  // Change from Memory to Mem0Bridge
   private genAI: GoogleGenerativeAI;
   private model: any;
 
   constructor() {
-    // Initialize Mem0 with configuration
-    const config = {
-      "llm": {
-        "provider": "google",
-        "config": {
-          "model": "gemini-pro",
-          "temperature": 0.1,
-          "max_tokens": 2000,
-        }
-      },
-        "embedder": {
-          "provider": "jina",
-          "config": {
-            "apiKey": process.env.JINA_API_KEY,
-            "dimensions": process.env.MEMORY_VECTOR_DIMENSIONS || 1024
-          }
-        },
-        "vector_store": {
-          "provider": "milvus",
-          "config": {
-            "collection_name": "aivy_memories",
-            "embedding_model_dims": process.env.MEMORY_VECTOR_DIMENSIONS || 1024,
-            "address": process.env.MILVUS_ADDRESS,
-            "token": process.env.MILVUS_TOKEN
-          }
-        },
-        "custom_prompt": this.getCustomPrompt(),
-        "version": "v1.1"
-      }
-
-    this.mem0 = Memory.from_config(config);
+    // Initialize Mem0Bridge instead of direct Memory
+    this.mem0Bridge = new Mem0Bridge();
     this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
     this.model = this.genAI.getGenerativeModel({ model: "gemini-pro" });
   }
@@ -99,12 +80,12 @@ export class MemoryService {
         messageCount: messages.length,
         metadataKeys: Object.keys(metadata)
       });
-
+  
       const lastMessage = messages[messages.length - 1];
       
       // Generate embedding using Google's embedding model
       const embedding = await getEmbedding(lastMessage.content);
-
+  
       // Create memory entry
       const memoryEntry: MemoryEntry = {
         id: crypto.randomUUID(),
@@ -113,18 +94,19 @@ export class MemoryService {
         userId,
         timestamp: new Date()
       };
-
-      // Add to Mem0
-      await this.mem0.add(
+  
+      // Use mem0Bridge instead of mem0
+      await this.mem0Bridge.addMemory(
         lastMessage.content,
         userId,
         {
           ...metadata,
           messageId: memoryEntry.id,
-          timestamp: memoryEntry.timestamp
+          timestamp: memoryEntry.timestamp,
+          messages: JSON.stringify(messages)
         }
       );
-
+  
       // Store in Milvus
       await insertVector({
         userId,
@@ -136,9 +118,9 @@ export class MemoryService {
           metadata: JSON.stringify(metadata)
         }
       });
-
+  
       return memoryEntry;
-
+  
     } catch (error) {
       console.error('Error adding memory:', error);
       throw error;
@@ -151,9 +133,15 @@ export class MemoryService {
     limit: number = 5
   ): Promise<MemoryEntry[]> {
     try {
-      // Search using Mem0
-      const mem0Results = await this.mem0.search(query, userId);
-
+      console.log('Starting memory search:', {
+        query,
+        userId,
+        limit
+      });
+  
+      // Search using Mem0Bridge instead of direct mem0
+      const mem0Results = await this.mem0Bridge.searchMemories(query, userId, limit);
+  
       // Search using Milvus
       const embedding = await getEmbedding(query);
       const milvusResults = await searchSimilarContent({
@@ -162,62 +150,80 @@ export class MemoryService {
         limit,
         contentTypes: ['memory']
       });
-
+  
       // Combine and deduplicate results
       const combinedResults = new Map<string, MemoryEntry>();
-
-      // Add Mem0 results
-      interface Mem0Result {
-
-        metadata?: {
-      
-          messageId?: string;
-      
-          messages?: string;
-      
-          [key: string]: any;
-      
-        };
-      
-        user_id: string;
-      
-        created_at: string;
-      
+  
+      // Add Mem0Bridge results
+      if (mem0Results && Array.isArray(mem0Results.results)) {
+        console.log('Processing Mem0Bridge results:', {
+          resultCount: mem0Results.results.length
+        });
+  
+        mem0Results.results.forEach((result: Mem0Result) => {
+          if (result.metadata?.messageId) {
+            try {
+              combinedResults.set(result.metadata.messageId, {
+                id: result.metadata.messageId,
+                messages: JSON.parse(result.metadata?.messages || '[]'),
+                metadata: result.metadata,
+                userId: result.user_id,
+                timestamp: new Date(result.created_at)
+              });
+            } catch (parseError) {
+              console.error('Error parsing Mem0Bridge result:', {
+                error: parseError,
+                result: result
+              });
+            }
+          }
+        });
       }
-      
-      
-      mem0Results.results.forEach((result: Mem0Result) => {
-        if (result.metadata?.messageId) {
-          combinedResults.set(result.metadata.messageId, {
-            id: result.metadata.messageId,
-            messages: JSON.parse(result.metadata?.messages || '[]'),
-            metadata: result.metadata,
-            userId: result.user_id,
-            timestamp: new Date(result.created_at)
-          });
-        }
-      });
-
+  
       // Add Milvus results
+      console.log('Processing Milvus results:', {
+        resultCount: milvusResults.length
+      });
+  
       milvusResults.forEach((result: VectorResult) => {
         if (!combinedResults.has(result.content_id)) {
-          const parsedMetadata = JSON.parse(result.metadata);
-          combinedResults.set(result.content_id, {
-            id: result.content_id,
-            messages: JSON.parse(parsedMetadata.messages),
-            metadata: JSON.parse(parsedMetadata.metadata),
-            userId: result.user_id,
-            timestamp: new Date()
-          });
+          try {
+            const parsedMetadata = JSON.parse(result.metadata);
+            combinedResults.set(result.content_id, {
+              id: result.content_id,
+              messages: JSON.parse(parsedMetadata.messages),
+              metadata: JSON.parse(parsedMetadata.metadata),
+              userId: result.user_id,
+              timestamp: new Date()
+            });
+          } catch (parseError) {
+            console.error('Error parsing Milvus result:', {
+              error: parseError,
+              result: result
+            });
+          }
         }
       });
-
-      return Array.from(combinedResults.values())
+  
+      // Sort and limit results
+      const sortedResults = Array.from(combinedResults.values())
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
         .slice(0, limit);
-
+  
+      console.log('Memory search completed:', {
+        totalResults: sortedResults.length,
+        timestamp: new Date().toISOString()
+      });
+  
+      return sortedResults;
+  
     } catch (error) {
-      console.error('Error searching memories:', error);
+      console.error('Error searching memories:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        query,
+        userId,
+        timestamp: new Date().toISOString()
+      });
       throw error;
     }
   }
