@@ -1,5 +1,5 @@
-
 import { getMilvusClient } from './client';
+import { DataType } from '@zilliz/milvus2-sdk-node';
 
 export async function initializeMilvusCollections() {
   try {
@@ -9,12 +9,12 @@ export async function initializeMilvusCollections() {
     await client.createCollection({
       collection_name: 'content_vectors',
       fields: [
-        { name: 'id', type: 'VarChar', is_primary_key: true, max_length: 36 },
-        { name: 'user_id', type: 'VarChar', max_length: 36 },
-        { name: 'content_type', type: 'VarChar', max_length: 50 },
-        { name: 'content_id', type: 'VarChar', max_length: 36 },
-        { name: 'metadata', type: 'JSON' },
-        { name: 'embedding', type: 'FloatVector', dim: 1024 }
+        { name: 'id', data_type: DataType.VARCHAR, is_primary_key: true, max_length: 36 },
+        { name: 'user_id', data_type: DataType.VARCHAR, max_length: 36 },
+        { name: 'content_type', data_type: DataType.VARCHAR, max_length: 50 },
+        { name: 'content_id', data_type: DataType.VARCHAR, max_length: 36 },
+        { name: 'metadata', data_type: DataType.JSON },
+        { name: 'embedding', data_type: DataType.FLOAT_VECTOR, dim: 1024 }
       ]
     });
 
@@ -22,12 +22,12 @@ export async function initializeMilvusCollections() {
     await client.createCollection({
       collection_name: 'knowledge_graph',
       fields: [
-        { name: 'id', type: 'VarChar', is_primary_key: true, max_length: 36 },
-        { name: 'user_id', type: 'VarChar', max_length: 36 },
-        { name: 'source_id', type: 'VarChar', max_length: 36 },
-        { name: 'target_id', type: 'VarChar', max_length: 36 },
-        { name: 'relationship_type', type: 'VarChar', max_length: 50 },
-        { name: 'metadata', type: 'JSON' }
+        { name: 'id', data_type: DataType.VARCHAR, is_primary_key: true, max_length: 36 },
+        { name: 'user_id', data_type: DataType.VARCHAR, max_length: 36 },
+        { name: 'source_id', data_type: DataType.VARCHAR, max_length: 36 },
+        { name: 'target_id', data_type: DataType.VARCHAR, max_length: 36 },
+        { name: 'relationship_type', data_type: DataType.VARCHAR, max_length: 50 },
+        { name: 'metadata', data_type: DataType.JSON }
       ]
     });
 
