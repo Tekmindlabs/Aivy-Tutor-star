@@ -167,7 +167,26 @@ export class MemoryService {
       const combinedResults = new Map<string, MemoryEntry>();
 
       // Add Mem0 results
-      mem0Results.results.forEach(result => {
+      interface Mem0Result {
+
+        metadata?: {
+      
+          messageId?: string;
+      
+          messages?: string;
+      
+          [key: string]: any;
+      
+        };
+      
+        user_id: string;
+      
+        created_at: string;
+      
+      }
+      
+      
+      mem0Results.results.forEach((result: Mem0Result) => {
         if (result.metadata?.messageId) {
           combinedResults.set(result.metadata.messageId, {
             id: result.metadata.messageId,
