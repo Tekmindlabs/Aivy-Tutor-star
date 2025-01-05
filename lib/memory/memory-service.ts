@@ -29,25 +29,25 @@ export class MemoryService {
           "max_tokens": 2000,
         }
       },
-      "embedder": {
-        "provider": "google",
-        "config": {
-          "model": "embedding-001"
-        }
-      },
-      "vector_store": {
-        "provider": "milvus",
-        "config": {
-          "collection_name": "aivy_memories",
-          "embedding_model_dims": 768,
-          "address": process.env.MILVUS_ADDRESS || 'localhost:19530',
-          "username": process.env.MILVUS_USERNAME,
-          "password": process.env.MILVUS_PASSWORD
-        }
-      },
-      "custom_prompt": this.getCustomPrompt(),
-      "version": "v1.1"
-    };
+        "embedder": {
+          "provider": "jina",
+          "config": {
+            "apiKey": process.env.JINA_API_KEY,
+            "dimensions": process.env.MEMORY_VECTOR_DIMENSIONS || 1024
+          }
+        },
+        "vector_store": {
+          "provider": "milvus",
+          "config": {
+            "collection_name": "aivy_memories",
+            "embedding_model_dims": process.env.MEMORY_VECTOR_DIMENSIONS || 1024,
+            "address": process.env.MILVUS_ADDRESS,
+            "token": process.env.MILVUS_TOKEN
+          }
+        },
+        "custom_prompt": this.getCustomPrompt(),
+        "version": "v1.1"
+      }
 
     this.mem0 = Memory.from_config(config);
     this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
@@ -57,21 +57,32 @@ export class MemoryService {
   private getCustomPrompt(): string {
     return `
     Please extract key information from the interaction that includes:
-    - User learning preferences
-    - Topics discussed
-    - Questions asked
-    - Understanding level
-    - Emotional state
+    - User's emotional state and mood
+    - Personal interests and preferences
+    - Current concerns or challenges
+    - Communication style
+    - Social context and needs
+    - Goals and aspirations
     
     Example:
-    Input: "I prefer visual explanations and I'm struggling with math concepts"
+    Input: "I've been feeling overwhelmed lately with work, and I prefer having someone to talk to about my day. I really enjoy photography but haven't had time for it."
     Output: {
       "facts": [
-        "Learning style: visual",
-        "Subject difficulty: math",
-        "Emotional state: struggling"
+        "Emotional state: overwhelmed",
+        "Communication preference: conversational",
+        "Personal interest: photography",
+        "Challenge: work-life balance",
+        "Social need: seeking emotional support",
+        "Context: work stress"
       ]
     }
+    
+    Additional context to extract:
+    - Long-term patterns in user's behavior
+    - Preferred interaction style
+    - Support preferences
+    - Personal values and beliefs
+    - Daily routines and habits
     
     Return the facts in JSON format as shown above.
     `;

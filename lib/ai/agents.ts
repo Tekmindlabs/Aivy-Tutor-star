@@ -4,7 +4,7 @@ import { Message } from "@/types/chat";
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
 
 // Define base types
-export type AgentRole = 'master' | 'emotional' | 'tutor' | 'researcher' | 'validator';
+export type AgentRole = 'companion' | 'emotional' | 'support' | 'memory' | 'engagement';
 
 export interface EmotionalState {
   mood: string;
@@ -19,6 +19,7 @@ export interface ReActStep {
 }
 
 // Base state interface
+// Update the AgentState interface in agents.ts
 export interface AgentState {
   messages: Message[];
   currentStep: string;
@@ -31,6 +32,19 @@ export interface AgentState {
       validation?: string;
     };
     recommendations?: string;
+    personalPreferences: {
+      interests?: string[];
+      communicationStyle?: string;
+      emotionalNeeds?: string[];
+      dailyRoutines?: string[];
+      supportPreferences?: string[];
+    };
+    relationshipDynamics: {
+      trustLevel?: string;
+      engagementStyle?: string;
+      connectionStrength?: string;
+      interactionHistory?: string[];
+    };
   };
   reactSteps?: ReActStep[];
 }
@@ -122,17 +136,30 @@ export interface HybridResponse extends AgentResponse {
 // Utility function to create base agent state
 export const createInitialAgentState = (
   messages: Message[], 
-  role: AgentRole = 'tutor'
+  role: AgentRole = 'companion'
 ): AgentState => ({
   messages,
   currentStep: 'initial',
   emotionalState: {
-    mood: 'neutral',
+    mood: 'welcoming',
     confidence: 'medium'
   },
   context: {
     role,
     analysis: {},
-    recommendations: ''
+    recommendations: '',
+    personalPreferences: {
+      interests: [],
+      communicationStyle: 'adaptive',
+      emotionalNeeds: [],
+      dailyRoutines: [],
+      supportPreferences: []
+    },
+    relationshipDynamics: {
+      trustLevel: 'building',
+      engagementStyle: 'adaptive',
+      connectionStrength: 'initial',
+      interactionHistory: []
+    }
   }
 });

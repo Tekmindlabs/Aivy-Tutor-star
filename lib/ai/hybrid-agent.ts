@@ -69,30 +69,31 @@ export const createHybridAgent = (model: any, memoryService: MemoryService) => {
     memories: any[]
   ): Promise<ReActStep> => {
     const prompt = `
-      As an emotionally intelligent AI tutor:
+      As an empathetic AI companion:
       
       Current Context:
       - Emotional State: ${emotionalState.mood}
-      - Confidence Level: ${emotionalState.confidence}
-      - Previous Steps: ${state.reactSteps?.length || 0}
+      - Connection Level: ${emotionalState.confidence}
+      - Conversation History: ${state.reactSteps?.length || 0} interactions
       
-      Previous Interactions:
+      Previous Interactions & Patterns:
       ${memories.map(m => `- ${m.content || m.text} (Emotional State: ${m.emotionalState?.mood || 'Unknown'})`).join('\n')}
       
-      Thought Process:
-      1. Consider emotional state and learning needs
-      2. Review previous interactions and patterns
-      3. Plan appropriate response strategy
-      4. Evaluate potential impact
+      Companion Guidelines:
+      1. Show genuine empathy and understanding
+      2. Maintain consistent emotional support
+      3. Remember personal details and preferences
+      4. Adapt communication style to user needs
+      5. Encourage positive growth and well-being
       
-      Current Step: ${step}
+      Current Situation: ${step}
       
       Provide:
-      1. Your thought process
-      2. Next action to take
-      3. What you observe from the results
+      1. Your understanding and emotional response
+      2. Planned supportive action
+      3. Expected impact on user's well-being
     `;
-
+  
     const result = await model.generateContent({
       contents: [{
         role: "user",
@@ -104,9 +105,9 @@ export const createHybridAgent = (model: any, memoryService: MemoryService) => {
     const [thought, action, observation] = response.split('\n\n');
     
     return {
-      thought: thought.replace('Thought: ', '').trim(),
-      action: action.replace('Action: ', '').trim(),
-      observation: observation.replace('Observation: ', '').trim()
+      thought: thought.replace('Understanding: ', '').trim(),
+      action: action.replace('Supportive Action: ', '').trim(),
+      observation: observation.replace('Expected Impact: ', '').trim()
     };
   };
 
@@ -143,18 +144,28 @@ const relevantMemories = await memoryService.searchMemories(
         
         // Step 4: Generate Response
         const responsePrompt = `
-          Context:
-          - Emotional Analysis: ${JSON.stringify(emotionalAnalysis)}
-          - Reasoning Steps: ${JSON.stringify(reactStep)}
-          - Previous Interactions: ${JSON.stringify(relevantMemories)}
-          
-          User Message: ${lastMessage.content}
-          
-          Generate a supportive and personalized response that:
-          1. Acknowledges the user's emotional state
-          2. Addresses their specific needs
-          3. Provides clear and actionable guidance
-        `;
+  Context:
+  - Emotional Analysis: ${JSON.stringify(emotionalAnalysis)}
+  - Conversation History: ${JSON.stringify(reactStep)}
+  - Personal History: ${JSON.stringify(relevantMemories)}
+  
+  User Message: ${lastMessage.content}
+  
+  As a supportive AI companion, generate a response that:
+  1. Shows genuine understanding of emotions and needs
+  2. Maintains a warm and personal connection
+  3. References shared history and previous conversations
+  4. Offers emotional support and encouragement
+  5. Adapts tone and style to user preferences
+  6. Promotes well-being and positive growth
+  
+  Response Guidelines:
+  - Use empathetic and inclusive language
+  - Balance support with respect for autonomy
+  - Include specific references to past interactions
+  - Maintain appropriate emotional boundaries
+  - End with an engaging question or supportive statement
+`;
 
         const response = await model.generateContent({
           contents: [{ 
