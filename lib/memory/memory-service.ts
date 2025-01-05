@@ -232,30 +232,27 @@ export class MemoryService {
     }
   }
 
-  async deleteMemory(userId: string, memoryId: string): Promise<void> {
-    try {
-      // Delete from Mem0Bridge
-      const deleteResult = await this.mem0Bridge.runPythonCommand('delete', {
-        userId,
-        memoryId
-      });
-  
-      if (!deleteResult || !deleteResult.success) {
-        throw new Error('Failed to delete memory from Mem0Bridge');
-      }
-  
-      // Delete from Milvus
-      // TODO: Implement Milvus deletion
-      // await deleteMilvusVector(memoryId);
-  
-      console.log('Memory deleted successfully:', {
-        userId,
-        memoryId,
-        timestamp: new Date().toISOString()
-      });
-  
-    } catch (error) {
-      console.error('Error deleting memory:', error);
-      throw error;
+  async deleteMemory(userId: string, memoryId: string) {
+  try {
+    const deleteResult = await this.mem0Bridge.deleteMemory(userId, memoryId); // Using the new public method
+
+    if (!deleteResult || !deleteResult.success) {
+      throw new Error('Failed to delete memory from Mem0Bridge');
     }
+
+    // Delete from Milvus
+    // TODO: Implement Milvus deletion
+    // await deleteMilvusVector(memoryId);
+
+    console.log('Memory deleted successfully:', {
+      userId,
+      memoryId,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error deleting memory:', error);
+    throw error;
   }
+}
+}
