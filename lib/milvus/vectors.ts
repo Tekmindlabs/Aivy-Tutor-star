@@ -99,16 +99,17 @@ export async function insertVector({
 export async function searchSimilarContent({
   userId,
   embedding,
-  limit = 5,
-  contentTypes = ['document', 'url', 'note']
+  limit,
+  contentTypes
 }: {
   userId: string;
   embedding: number[];
-  limit?: number;
-  contentTypes?: string[];
-}) {
+  limit: number;
+  contentTypes: string[];
+}): Promise<{ data: VectorResult[], timestamp: string }> {
   try {
-    console.log('Starting similarity search:', {
+    // Log search attempt
+    console.log('Starting vector search:', {
       userId,
       embeddingDimension: embedding.length,
       limit,
@@ -117,46 +118,52 @@ export async function searchSimilarContent({
 
     // Get Milvus client
     const client = await getMilvusClient();
-    console.log('Milvus client connected for search');
+    console.log('Milvus client connected successfully');
 
     // Verify embedding dimension
     if (embedding.length !== 1024) {
-      const error = new Error(`Invalid search embedding dimension: ${embedding.length}`);
-      console.error('Search embedding validation failed:', error);
-      throw error;
+      throw new Error(`Invalid embedding dimension: ${embedding.length}, expected 1024`);
     }
 
-    // Prepare search filter
-    const filter = `user_id == "${userId}" && content_type in ${JSON.stringify(contentTypes)}`;
-    console.log('Applying search filter:', filter);
+    const searchParams = {
+      collection_name: 'memories',
+      search_params: {
+        anns_field: 'embedding',
+        topk: limit,
+        metric_type: 'L2',
+        params: { nprobe: 10 },
+      },
+      vector_field: embedding,
+      output_fields: ['content', 'user_id', 'timestamp', 'metadata', 'content_type'],
+      expression: `user_id == "${userId}" && content_type in ["${contentTypes.join('","')}"]`
+    };
 
-    // Perform search
-    const results = await client.search({
-      collection_name: 'content_vectors',
-      vector: embedding,
-      filter: filter,
-      limit,
-      output_fields: ['content_type', 'content_id', 'metadata'],
-      params: { 
-        nprobe: 10,
-        metric_type: 'L2'
-      }
-    });
+    // Execute search
+    const searchResult = await client.search(searchParams);
+    
+    // Transform results to VectorResult format
+    const transformedResults = Array.isArray(searchResult.results) 
+      ? searchResult.results.map((result: any) => ({
+          content_id: result.id || uuidv4(),
+          user_id: result.user_id,
+          content_type: result.content_type,
+          metadata: result.metadata,
+          timestamp: result.timestamp || new Date().toISOString(),
+          score: result.score
+        }))
+      : [];
 
-    console.log('Search completed successfully:', {
-      resultCount: results.length,
+    return {
+      data: transformedResults,
       timestamp: new Date().toISOString()
-    });
+    };
 
-    return results;
-
-  } catch (error: unknown) {
-    console.error('Similarity search failed:', {
-      error: error instanceof Error ? error.message : String(error),
-      userId,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
+  } catch (error) {
+    console.error('Error in searchSimilarContent:', error);
+    return { 
+      data: [], 
+      timestamp: new Date().toISOString() 
+    };
   }
 }
 

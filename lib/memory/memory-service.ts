@@ -24,7 +24,7 @@ interface Mem0Result {
 }
 
 export class MemoryService {
-  private mem0Bridge: Mem0Bridge;  // Change from Memory to Mem0Bridge
+  private mem0Bridge: Mem0Bridge;
   private genAI: GoogleGenerativeAI;
   private model: any;
 
@@ -33,6 +33,25 @@ export class MemoryService {
     this.mem0Bridge = new Mem0Bridge();
     this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
     this.model = this.genAI.getGenerativeModel({ model: "gemini-pro" });
+  }
+
+  // Add the new utility methods here, after constructor
+  private parseJSON(str: string, defaultValue: any = null): any {
+    try {
+      return JSON.parse(str);
+    } catch (e) {
+      console.error('JSON parse error:', e);
+      return defaultValue;
+    }
+  }
+
+  private validateMemoryEntry(entry: MemoryEntry): boolean {
+    return !!(
+      entry.id &&
+      Array.isArray(entry.messages) &&
+      entry.userId &&
+      entry.timestamp instanceof Date
+    );
   }
 
   private getCustomPrompt(): string {
@@ -83,7 +102,7 @@ export class MemoryService {
   
       const lastMessage = messages[messages.length - 1];
       
-      // Generate embedding using Google's embedding model
+      // Generate embedding
       const embedding = await getEmbedding(lastMessage.content);
   
       // Create memory entry
@@ -95,17 +114,21 @@ export class MemoryService {
         timestamp: new Date()
       };
   
-      // Use mem0Bridge instead of mem0
-      await this.mem0Bridge.addMemory(
+      // Add to Mem0Bridge
+      const mem0Result = await this.mem0Bridge.addMemory(
         lastMessage.content,
         userId,
         {
           ...metadata,
           messageId: memoryEntry.id,
-          timestamp: memoryEntry.timestamp,
+          timestamp: memoryEntry.timestamp.toISOString(),
           messages: JSON.stringify(messages)
         }
       );
+  
+      if (!mem0Result || !mem0Result.success) {
+        throw new Error('Failed to add memory to Mem0Bridge');
+      }
   
       // Store in Milvus
       await insertVector({
@@ -117,6 +140,12 @@ export class MemoryService {
           messages: JSON.stringify(messages),
           metadata: JSON.stringify(metadata)
         }
+      });
+  
+      console.log('Memory added successfully:', {
+        id: memoryEntry.id,
+        userId,
+        timestamp: memoryEntry.timestamp
       });
   
       return memoryEntry;
@@ -133,7 +162,9 @@ export class MemoryService {
     limit: number = 5
   ): Promise<MemoryEntry[]> {
     try {
-      // Search using Mem0Bridge instead of mem0
+      console.log('Starting memory search:', { query, userId, limit });
+  
+      // Search using Mem0Bridge
       const mem0Results = await this.mem0Bridge.searchMemories(query, userId, limit);
   
       // Search using Milvus
@@ -145,66 +176,86 @@ export class MemoryService {
         contentTypes: ['memory']
       });
   
-      // Combine and deduplicate results
+      // Initialize combined results map
       const combinedResults = new Map<string, MemoryEntry>();
   
-      // Add Mem0Bridge results
-      if (mem0Results && Array.isArray(mem0Results.results)) {
+      // Process Mem0Bridge results
+      if (mem0Results && mem0Results.success && Array.isArray(mem0Results.results)) {
         mem0Results.results.forEach((result: Mem0Result) => {
           if (result.metadata?.messageId) {
-            combinedResults.set(result.metadata.messageId, {
-              id: result.metadata.messageId,
-              messages: JSON.parse(result.metadata?.messages || '[]'),
-              metadata: result.metadata,
-              userId: result.user_id,
-              timestamp: new Date(result.created_at)
-            });
+            try {
+              combinedResults.set(result.metadata.messageId, {
+                id: result.metadata.messageId,
+                messages: JSON.parse(result.metadata.messages || '[]'),
+                metadata: result.metadata,
+                userId: result.user_id,
+                timestamp: new Date(result.created_at)
+              });
+            } catch (e) {
+              console.error('Error parsing Mem0 result:', e);
+            }
           }
         });
       }
   
-      // Add Milvus results
-      milvusResults.forEach((result: VectorResult) => {
-        if (!combinedResults.has(result.content_id)) {
-          const parsedMetadata = JSON.parse(result.metadata);
-          combinedResults.set(result.content_id, {
-            id: result.content_id,
-            messages: JSON.parse(parsedMetadata.messages),
-            metadata: JSON.parse(parsedMetadata.metadata),
-            userId: result.user_id,
-            timestamp: new Date()
-          });
-        }
-      });
+      // Process Milvus results
+      if (Array.isArray(milvusResults)) {
+        milvusResults.forEach((result: VectorResult) => {
+          if (!combinedResults.has(result.content_id)) {
+            try {
+              const parsedMetadata = JSON.parse(result.metadata || '{}');
+              combinedResults.set(result.content_id, {
+                id: result.content_id,
+                messages: JSON.parse(parsedMetadata.messages || '[]'),
+                metadata: JSON.parse(parsedMetadata.metadata || '{}'),
+                userId: result.user_id,
+                timestamp: new Date()
+              });
+            } catch (e) {
+              console.error('Error parsing Milvus result:', e);
+            }
+          }
+        });
+      }
   
-      return Array.from(combinedResults.values())
+      // Convert to array, sort, and limit results
+      const results = Array.from(combinedResults.values())
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
         .slice(0, limit);
   
+      console.log(`Found ${results.length} memories`);
+      return results;
+  
     } catch (error) {
       console.error('Error searching memories:', error);
-      throw error;
+      return []; // Return empty array instead of throwing
     }
   }
 
   async deleteMemory(userId: string, memoryId: string): Promise<void> {
     try {
-      // Delete from Mem0
-      await this.mem0.delete(memoryId, userId);
-
-      // Implementation for deleting from Milvus would go here
-      // This would typically involve removing the vector from Milvus
-      // and any associated metadata
-
+      // Delete from Mem0Bridge
+      const deleteResult = await this.mem0Bridge.runPythonCommand('delete', {
+        userId,
+        memoryId
+      });
+  
+      if (!deleteResult || !deleteResult.success) {
+        throw new Error('Failed to delete memory from Mem0Bridge');
+      }
+  
+      // Delete from Milvus
+      // TODO: Implement Milvus deletion
+      // await deleteMilvusVector(memoryId);
+  
       console.log('Memory deleted successfully:', {
         userId,
         memoryId,
         timestamp: new Date().toISOString()
       });
-
+  
     } catch (error) {
       console.error('Error deleting memory:', error);
       throw error;
     }
   }
-}

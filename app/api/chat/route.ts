@@ -11,6 +11,14 @@ import { MemoryService } from '@/lib/memory/memory-service';
 import { EmbeddingModel } from '@/lib/knowledge/embeddings';
 import { MemoryTools } from '@/lib/memory/memory-tools';
 
+
+// Add this type definition
+
+interface MemorySearchResponse {
+  success: boolean;
+  memories: any[];
+  error?: string;
+}
 // Type definitions
 interface SuccessResponse {
   success: true;
