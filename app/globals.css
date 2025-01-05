@@ -98,9 +98,6 @@
 }
 
 /* Add to your global CSS or component styles */
-.prose {
-  @apply text-base leading-7;
-}
 
 .prose p {
   @apply mb-4;
@@ -123,4 +120,20 @@
 
 .prose ol {
   @apply list-decimal;
+}
+
+.prose {
+  @apply text-gray-900 dark:text-gray-100;
+}
+
+.prose code {
+  @apply text-sm;
+}
+
+.prose pre {
+  @apply bg-gray-900 rounded-lg;
+}
+
+.message-transition {
+  @apply transition-all duration-200 ease-in-out;
 }

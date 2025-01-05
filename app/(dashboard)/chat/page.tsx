@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
 import { useEffect, useRef, useState } from "react";
-import { useChat, Message as AIMessage } from "ai/react"; // Updated import
+import { useChat, Message as AIMessage } from "ai/react";
 import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatMessage } from "@/components/chat/chat-message";
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { toast } from "@/components/ui/use-toast";
+import { motion, AnimatePresence } from 'framer-motion';
 
 const RETRY_DELAY = 1000;
 const MAX_RETRIES = 3;
@@ -27,7 +28,6 @@ export default function ChatPage() {
   const [retryCount, setRetryCount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Move handleChatError declaration before its usage
   const handleChatError = (error: Error): void => {
     console.error("Chat error:", error);
     
@@ -49,16 +49,6 @@ export default function ChatPage() {
     setIsSubmitting(false);
   };
 
-  const validateMessage = (message: unknown): message is ValidatedMessage => {
-    return (
-      typeof message === 'object' &&
-      message !== null &&
-      typeof (message as ValidatedMessage).content === 'string' &&
-      (message as ValidatedMessage).content.trim().length > 0 &&
-      ((message as ValidatedMessage).role === 'user' || (message as ValidatedMessage).role === 'assistant')
-    );
-  };
-
   const {
     messages,
     input,
@@ -75,7 +65,7 @@ export default function ChatPage() {
       content: 'Hello! How can I help you today?',
       id: crypto.randomUUID(),
       createdAt: new Date()
-    }],
+    }] as ValidatedMessage[],
     id: session?.user?.email || 'default',
     body: {
       userId: session?.user?.email,
@@ -95,7 +85,7 @@ export default function ChatPage() {
 
     const trySubmit = async (attempt: number): Promise<void> => {
       try {
-        const currentMessages = [...messages];
+        const currentMessages = [...messages] as ValidatedMessage[];
         
         const newMessage: ValidatedMessage = {
           id: crypto.randomUUID(),
@@ -104,7 +94,7 @@ export default function ChatPage() {
           createdAt: new Date(),
         };
 
-        setMessages((prev: ValidatedMessage[]) => [...prev, newMessage]);
+        setMessages([...currentMessages, newMessage]);
         setInput('');
 
         const response = await fetch('/api/chat', {
@@ -136,23 +126,24 @@ export default function ChatPage() {
           done = doneReading;
           const chunkValue = decoder.decode(value);
           if (chunkValue) {
-            setMessages((prev: ValidatedMessage[]) => {
-              const lastMessage = prev[prev.length - 1];
-              if (lastMessage.role === 'assistant') {
+            setMessages(prev => {
+              const messages = [...prev] as ValidatedMessage[];
+              const lastMessage = messages[messages.length - 1];
+              if (lastMessage?.role === 'assistant') {
                 return [
-                  ...prev.slice(0, -1),
+                  ...messages.slice(0, -1),
                   { ...lastMessage, content: lastMessage.content + chunkValue }
-                ];
+                ] as ValidatedMessage[];
               }
               return [
-                ...prev,
+                ...messages,
                 {
                   id: crypto.randomUUID(),
                   content: chunkValue,
                   role: 'assistant',
                   createdAt: new Date(),
                 }
-              ];
+              ] as ValidatedMessage[];
             });
           }
         }
@@ -195,20 +186,29 @@ export default function ChatPage() {
       <div className="container mx-auto max-w-4xl p-4">
         <Card className="flex h-[600px] flex-col">
           <ScrollArea className="flex-1 p-4" id="chat-container">
-            <div className="space-y-4" ref={scrollRef}>
-              {messages.map((message: ValidatedMessage, index: number) => (
-                <ChatMessage 
-                  key={message.id} 
-                  message={message}
-                  isLoading={isLoading && index === messages.length - 1}
-                />
-              ))}
-              {retryCount > 0 && (
-                <div className="text-sm text-gray-500 text-center">
-                  Retrying... Attempt {retryCount} of {MAX_RETRIES}
-                </div>
-              )}
-            </div>
+            <AnimatePresence>
+              <div className="space-y-4" ref={scrollRef}>
+                {messages.map((message, index) => (
+                  <motion.div
+                    key={message.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <ChatMessage 
+                      message={message as ValidatedMessage}
+                      isLoading={isLoading && index === messages.length - 1}
+                    />
+                  </motion.div>
+                ))}
+                {retryCount > 0 && (
+                  <div className="text-sm text-gray-500 text-center">
+                    Retrying... Attempt {retryCount} of {MAX_RETRIES}
+                  </div>
+                )}
+              </div>
+            </AnimatePresence>
           </ScrollArea>
 
           <div className="border-t p-4">
@@ -241,7 +241,12 @@ export default function ChatPage() {
         </Card>
 
         {error && (
-          <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-md">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="mt-4 p-4 bg-red-50 text-red-600 rounded-md"
+          >
             <p className="font-semibold">Error occurred:</p>
             <p>{error.message}</p>
             <Button
@@ -254,7 +259,7 @@ export default function ChatPage() {
             >
               Try Again
             </Button>
-          </div>
+          </motion.div>
         )}
       </div>
     </ErrorBoundary>
