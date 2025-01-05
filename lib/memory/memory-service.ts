@@ -133,13 +133,7 @@ export class MemoryService {
     limit: number = 5
   ): Promise<MemoryEntry[]> {
     try {
-      console.log('Starting memory search:', {
-        query,
-        userId,
-        limit
-      });
-  
-      // Search using Mem0Bridge instead of direct mem0
+      // Search using Mem0Bridge instead of mem0
       const mem0Results = await this.mem0Bridge.searchMemories(query, userId, limit);
   
       // Search using Milvus
@@ -156,74 +150,39 @@ export class MemoryService {
   
       // Add Mem0Bridge results
       if (mem0Results && Array.isArray(mem0Results.results)) {
-        console.log('Processing Mem0Bridge results:', {
-          resultCount: mem0Results.results.length
-        });
-  
         mem0Results.results.forEach((result: Mem0Result) => {
           if (result.metadata?.messageId) {
-            try {
-              combinedResults.set(result.metadata.messageId, {
-                id: result.metadata.messageId,
-                messages: JSON.parse(result.metadata?.messages || '[]'),
-                metadata: result.metadata,
-                userId: result.user_id,
-                timestamp: new Date(result.created_at)
-              });
-            } catch (parseError) {
-              console.error('Error parsing Mem0Bridge result:', {
-                error: parseError,
-                result: result
-              });
-            }
+            combinedResults.set(result.metadata.messageId, {
+              id: result.metadata.messageId,
+              messages: JSON.parse(result.metadata?.messages || '[]'),
+              metadata: result.metadata,
+              userId: result.user_id,
+              timestamp: new Date(result.created_at)
+            });
           }
         });
       }
   
       // Add Milvus results
-      console.log('Processing Milvus results:', {
-        resultCount: milvusResults.length
-      });
-  
       milvusResults.forEach((result: VectorResult) => {
         if (!combinedResults.has(result.content_id)) {
-          try {
-            const parsedMetadata = JSON.parse(result.metadata);
-            combinedResults.set(result.content_id, {
-              id: result.content_id,
-              messages: JSON.parse(parsedMetadata.messages),
-              metadata: JSON.parse(parsedMetadata.metadata),
-              userId: result.user_id,
-              timestamp: new Date()
-            });
-          } catch (parseError) {
-            console.error('Error parsing Milvus result:', {
-              error: parseError,
-              result: result
-            });
-          }
+          const parsedMetadata = JSON.parse(result.metadata);
+          combinedResults.set(result.content_id, {
+            id: result.content_id,
+            messages: JSON.parse(parsedMetadata.messages),
+            metadata: JSON.parse(parsedMetadata.metadata),
+            userId: result.user_id,
+            timestamp: new Date()
+          });
         }
       });
   
-      // Sort and limit results
-      const sortedResults = Array.from(combinedResults.values())
+      return Array.from(combinedResults.values())
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
         .slice(0, limit);
   
-      console.log('Memory search completed:', {
-        totalResults: sortedResults.length,
-        timestamp: new Date().toISOString()
-      });
-  
-      return sortedResults;
-  
     } catch (error) {
-      console.error('Error searching memories:', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        query,
-        userId,
-        timestamp: new Date().toISOString()
-      });
+      console.error('Error searching memories:', error);
       throw error;
     }
   }
