@@ -9,6 +9,7 @@ import { AgentState, ReActStep, EmotionalState } from '@/lib/ai/agents';
 import { Message } from '@/types/chat';
 import { MemoryService } from '@/lib/memory/memory-service';
 import { EmbeddingModel } from '@/lib/knowledge/embeddings';
+import { MemoryTools } from '@/lib/memory/memory-tools';
 
 // Type definitions
 interface SuccessResponse {
@@ -45,6 +46,10 @@ interface ChatMetadata {
     difficulty: string | null;
     interests: string[];
   };
+  memoryContext?: {
+    relevantMemoriesCount: number;
+    memoryId: string;
+  };
 }
 
 // Process steps for better error tracking
@@ -52,9 +57,11 @@ const STEPS = {
   INIT: 'Initializing request',
   AUTH: 'Authenticating user',
   PROCESS: 'Processing messages',
+  MEMORY_SEARCH: 'Searching memories',
   EMBED: 'Generating embeddings',
   AGENT: 'Processing with hybrid agent',
   RESPONSE: 'Generating response',
+  MEMORY_STORE: 'Storing memory',
   STREAM: 'Streaming response'
 };
 
@@ -64,14 +71,18 @@ if (!process.env.GOOGLE_AI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
 
-// Request deduplication using Map instead of Cache API
+// Initialize memory service
+const memoryService = new MemoryService();
+const memoryTools = new MemoryTools(memoryService);
+
+// Request deduplication using Map
 const requestCache = new Map<string, Response>();
 
 export async function POST(req: NextRequest) {
   const runId = crypto.randomUUID();
   let currentStep = STEPS.INIT;
   
-  // Deduplication check using Map
+  // Deduplication check
   const requestId = req.headers.get('x-request-id') || runId;
   const cachedResponse = requestCache.get(requestId);
   
@@ -108,9 +119,6 @@ export async function POST(req: NextRequest) {
         difficultyPreference: true,
         interests: true
       }
-    }).catch(error => {
-      console.error("Prisma query error:", error);
-      throw new Error("Database query failed");
     });
 
     if (!user) {
@@ -120,17 +128,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Search memories
+    currentStep = STEPS.MEMORY_SEARCH;
+    const lastMessage = messages[messages.length - 1];
+    const relevantMemories = await memoryService.searchMemories(
+      lastMessage.content,
+      user.id,
+      5
+    ).catch(error => {
+      console.warn('Memory search failed:', error);
+      return [];
+    });
+
+    // Format memory context
+    const memoryContext = relevantMemories
+      .map(memory => `Previous interaction: ${memory.messages[memory.messages.length - 1].content}`)
+      .join('\n');
+
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
     const { stream, handlers } = LangChainStream({
       experimental_streamData: true
     });
 
-    // Initialize services
+    // Process messages with memory context
     currentStep = STEPS.PROCESS;
-    const memoryService = new MemoryService();
-    const hybridAgent = createHybridAgent(model, memoryService);
-
-    // Process messages
     const processedMessages = messages.map(msg => ({
       ...msg,
       content: msg.content.trim()
@@ -138,7 +159,6 @@ export async function POST(req: NextRequest) {
 
     // Generate embeddings
     currentStep = STEPS.EMBED;
-    const lastMessage = processedMessages[processedMessages.length - 1];
     const embeddingResult = await EmbeddingModel.generateEmbedding(lastMessage.content);
     const embedding = Array.from(embeddingResult);
     
@@ -149,6 +169,9 @@ export async function POST(req: NextRequest) {
       token_type_ids: new Float32Array(embedding.length).fill(0)
     };
 
+    // Create hybrid agent with memory context
+    const hybridAgent = createHybridAgent(model, memoryService);
+    
     // Process with hybrid agent
     currentStep = STEPS.AGENT;
     const initialState: HybridState = {
@@ -162,7 +185,8 @@ export async function POST(req: NextRequest) {
       context: {
         role: "tutor",
         analysis: {},
-        recommendations: ""
+        recommendations: "",
+        previousMemories: memoryContext
       },
       reactSteps: [],
       processedTensors
@@ -173,7 +197,7 @@ export async function POST(req: NextRequest) {
       throw new Error(response.error || "Processing failed");
     }
 
-    // Parallel operations
+    // Generate personalized response with memory context
     currentStep = STEPS.RESPONSE;
     const [personalizedResponse, memoryResult] = await Promise.all([
       model.generateContent({
@@ -181,6 +205,9 @@ export async function POST(req: NextRequest) {
           role: 'user',
           parts: [{
             text: `
+              Context from previous interactions:
+              ${memoryContext}
+              
               Given this response: "${response.response}"
               Please adapt it for a ${user.learningStyle || 'general'} learner 
               with ${user.difficultyPreference || 'moderate'} difficulty preference.
@@ -198,36 +225,45 @@ export async function POST(req: NextRequest) {
           emotionalState: response.emotionalState,
           learningStyle: user.learningStyle,
           difficultyPreference: user.difficultyPreference,
-          interests: user.interests
+          interests: user.interests,
+          timestamp: new Date().toISOString(),
+          sessionId: runId
         }
       )
     ]);
 
-const finalResponse = personalizedResponse.response.text()
-.replace(/^\d+:/, '') // Remove numeric prefix
-.replace(/\\n/g, '\n') // Replace escaped newlines
-.trim();
-    
-    // Store chat in database without blocking
+    const finalResponse = personalizedResponse.response.text()
+      .replace(/^\d+:/, '')
+      .replace(/\\n/g, '\n')
+      .trim();
+
+    // Store chat with memory metadata
+    const chatMetadata: ChatMetadata = {
+      emotionalState: response.emotionalState || null,
+      reactSteps: response.reactSteps?.map(step => ({
+        thought: step.thought,
+        action: step.action,
+        observation: step.observation,
+        response: step.response
+      })) || [],
+      personalization: {
+        learningStyle: user.learningStyle || null,
+        difficulty: user.difficultyPreference || null,
+        interests: user.interests || []
+      },
+      memoryContext: {
+        relevantMemoriesCount: relevantMemories.length,
+        memoryId: memoryResult.id
+      }
+    };
+
+    // Store chat in database
     prisma.chat.create({
       data: {
         userId: user.id,
         message: lastMessage.content,
         response: finalResponse,
-        metadata: {
-          emotionalState: response.emotionalState || null,
-          reactSteps: response.reactSteps?.map(step => ({
-            thought: step.thought,
-            action: step.action,
-            observation: step.observation,
-            response: step.response
-          })) || [],
-          personalization: {
-            learningStyle: user.learningStyle || null,
-            difficulty: user.difficultyPreference || null,
-            interests: user.interests || []
-          }
-        } as ChatMetadata,
+        metadata: chatMetadata,
       },
     }).catch((dbError: Error) => {
       console.error("Error saving chat to database:", dbError);
@@ -241,16 +277,10 @@ const finalResponse = personalizedResponse.response.text()
         role: 'assistant',
         content: finalResponse,
         createdAt: new Date()
-      };;
-      
-      // Convert for AI handler
-      const aiMessage = {
-        ...messageData,
-        createdAt: new Date() // Convert to Date object for AI handler
       };
       
       await handlers.handleLLMNewToken(finalResponse);
-      await handlers.handleLLMEnd(aiMessage, runId);
+      await handlers.handleLLMEnd(messageData, runId);
 
       const streamResponse = new StreamingTextResponse(stream);
       requestCache.set(requestId, streamResponse.clone());

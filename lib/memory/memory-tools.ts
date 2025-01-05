@@ -30,8 +30,16 @@ class AddMemoryTool extends StructuredTool {
     userId: string;
     metadata?: Record<string, any>;
   }) {
-    await this.memoryService.addMemory(messages, userId, metadata);
-    return 'Memory added successfully';
+    const result = await this.memoryService.addMemory(
+      messages, 
+      userId, 
+      {
+        ...metadata,
+        tool: 'add_memory',
+        timestamp: new Date().toISOString()
+      }
+    );
+    return `Memory added successfully with ID: ${result.id}`;
   }
 }
 

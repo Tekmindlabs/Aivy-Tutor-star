@@ -1,0 +1,486 @@
+FutureSmart AI Blog
+Integrating Mem0 with LangChain: Enhancing AI Assistants with Intelligent Memory
+Shreyas Dhaware's photo
+Pradip Nichite's photo
+·
+Oct 9, 2024
+·
+
+13 min read
+Integrating Mem0 with LangChain: Enhancing AI Assistants with Intelligent Memory
+Table of contents
+
+    Introduction
+    Mem0 - Making Long-Lasting AI Interactions
+
+    What is Mem0
+
+Installation and Basic Usage
+Components of Mem0
+
+Graph Memory:
+LLM:
+Vector Databases:
+
+        Features
+    Mem0 vs. Retrieval-Augmented Generation (RAG)
+    Mem0 Application with Langchain Integration
+    Conclusion
+    Resources and Further Reading
+    Next Steps: Bringing AI into Your Business
+
+Introduction
+
+Large language models (LLMs) like ChatGPT struggle to remember details in long conversations, which affects their performance. This memory constraint becomes particularly critical in domains where long-term data retention is essential, such as healthcare, legal, and customer service. In healthcare, for instance, AI-driven diagnostic systems may require a detailed history of patient symptoms, treatments, and responses to provide accurate recommendations. However, when these large models cannot retain past information beyond a certain threshold, their suggestions can lack context, leading to potential errors or incomplete analysis.
+
+One promising solution to this issue is the development of "memory-augmented" architectures. These models are designed with external memory systems that allow them to store and retrieve information more effectively over extended dialogues. By bridging this memory gap, these models can simulate a more human-like conversational flow, maintaining continuity across topics and making more nuanced decisions based on earlier inputs.
+
+This blog post explores how to Integrate Memory capabilities into your Langchain-based AI applications, allowing for more personalized and context-aware interactions. We will be creating an AI Healthcare Support Bot
+Mem0 - Making Long-Lasting AI Interactions
+What is Mem0
+
+Mem0 (pronounced “mem-zero”) is an advanced memory management system tailored for AI applications, designed to significantly enhance the capabilities of large language models (LLMs) and AI agents. It functions as an intelligent memory layer, enabling AI systems to retain and adapt to user preferences, traits, and previous interactions across multiple sessions. This persistent memory capability makes Mem0 ideal for applications such as customer support chatbots and AI assistants, where personalized and continuous engagement is critical.
+
+    Mem0’s memory is not only long-lasting but also dynamic, updating over time to reflect changes in user behaviour, making interactions more relevant and customized.
+
+    What sets Mem0 apart from traditional memory systems is its context-aware architecture. Instead of merely storing static information, Mem0 intelligently organizes data, understanding relationships between different pieces of information and prioritizing the most recent and relevant details. This allows AI models to provide more meaningful, personalized responses.
+
+    Moreover, Mem0’s adaptive design enables it to “forget” outdated or irrelevant details, ensuring that AI models maintain efficiency while focusing on the most critical aspects of the user’s history.
+
+    Mem0 is available as both a managed platform and an open-source solution, providing flexibility for developers to integrate this memory-enhancing technology into their AI systems.
+
+Installation and Basic Usage
+
+Set Open API Key
+
+import getpass
+import os
+
+os.environ["OPENAI_API_KEY"] = getpass.getpass()
+
+Installation of Mem0
+
+pip install mem0ai
+
+Initialize Mem0
+
+from mem0 import Memory
+m = Memory()
+
+Store Memory
+
+We can store memory by extracting key details from user interactions, and updating them when changes occur in future conversations.
+
+result = m.add("Likes to play cricket on weekends", user_id="alice", metadata={"category": "hobbies"})
+
+Retrieve Memory
+
+# Get all memories
+all_memories = m.get_all()
+# Get a single memory by ID
+specific_memory = m.get("memory-id")
+
+Output:
+{
+     "id":"13efe83b-a8df-4ec0-814e-428d6e8451eb",
+     "memory":"Likes to play cricket on weekends",
+     "hash":"87bcddeb-fe45-4353-bc22-15a841c50308",
+     "metadata":"None",
+     "created_at":"2024-07-26T08:44:41.039788-07:00",
+     "updated_at":"None",
+     "user_id":"alice"
+}
+
+Memory Search
+
+related_memories = m.search(query="What are Alice's hobbies?", user_id="alice")
+
+When needed, the AI can search the stored memory and retrieve relevant information, providing context for more accurate and personalized responses. This approach ensures seamless, context-aware interactions, even across multiple sessions.
+
+We can reset, update, and view the memory history as needed. This flexibility allows the AI to adapt to changing user preferences or clear outdated information. By accessing the memory history, you can track past interactions, ensuring continuity and improving the AI's responsiveness over time.
+Components of Mem0
+Graph Memory:
+
+Mem0 can be used with a graph-based memory system that enables the AI to represent and retrieve complex relationships between different pieces of information. This structure allows the AI to store isolated facts and understand how these data interconnect, enabling more nuanced, context-aware responses by drawing upon the relationships between user preferences, past interactions, and other relevant details.
+
+Although Graph Memory is not necessary, this integration enables users to leverage the strengths of both vector-based and graph-based approaches, resulting in more accurate and comprehensive information retrieval and generation.
+
+config = {
+    "graph_store": {
+        "provider": "neo4j",
+        "config": {
+            "url": "neo4j+s://xxx",
+            "username": "neo4j",
+            "password": "xxx"
+        }
+    },
+    "version": "v1.1"
+}
+
+LLM:
+
+Mem0 features built-in support for various popular large language models (LLMs), allowing users to leverage their preferred LLMs for memory management. This integration ensures that memory capabilities are tailored to the specific needs of the application, enhancing the efficiency and effectiveness of AI interactions
+
+LLMs:
+
+    OpenAI,
+
+    Ollama,
+
+    Azure OpenAI,
+
+    Anthropic,
+
+    Together, etc
+
+config = {
+    "llm": {
+        "provider": "openai",
+        "config": {
+            "model": "gpt-4o",
+            "temperature": 0.1,
+            "max_tokens": 2000,
+        }
+    }
+}
+
+Vector Databases:
+
+Mem0 includes built-in support for various popular databases, allowing users to leverage their chosen database for memory storage and retrieval. This feature ensures that the memory system can efficiently manage and utilize the data specific to the application
+
+Supported Vector Database:
+
+    Qdrant,
+
+    Chroma,
+
+    Pgvector.
+
+config = {
+    "vector_store": {
+        "provider": "chroma",
+        "config": {
+            "collection_name": "mem0",
+            "host": "your-host-address.com",  # Replace with actual host address
+            "port": 8000                      # Replace with the port number where Chroma server is running
+    }
+}
+
+    For a step-by-step tutorial on hosting Chroma DB on AWS, be sure to check out this comprehensive blog post and video
+
+Embedding Models
+
+Convert Memory text into vector representations for semantic search. See the list of supported embedders below:
+
+    OpenAI,
+
+    Azure OpenAI,
+
+    Ollama,
+
+    Hugging Face, etc
+
+config:{
+    "embedder": {
+        "provider": "openai",
+        "config": {
+            "model": "text-embedding-3-large"
+        }
+    }
+}
+
+Features
+
+OpenAI Compatibility
+
+Mem0’s APIs are designed to be compatible with OpenAI’s, to make it easy to leverage Mem0 in applications you may have already built.
+
+from mem0.proxy.main import Mem0
+
+client = Mem0(api_key="m0-xxx")
+
+messages = [
+  {
+    "role": "user",
+    "content": "I love indian food but I cannot eat pizza since allergic to cheese."
+  },
+]
+user_id = "alice"
+chat_completion = client.chat.completions.create(messages=messages, model="gpt-4o-mini", user_id=user_id)
+
+Custom Prompts - Controls the Information Stored
+
+Mem0 supports custom prompts, enabling users to tailor the behaviour of their Mem0 instance to suit specific use cases or domains. By defining these custom prompts, users can control how information is extracted, processed, and stored within the memory system, allowing for a more targeted and effective approach to managing user interactions and enhancing the overall AI experience.
+
+custom_prompt = """
+Please only extract entities containing customer support information, order details, and user information. 
+Here are some few shot examples:
+
+Input: The weather is nice today.
+Output: {{"facts" : []}}
+
+Input: I'm John Doe, and I'd like to return the shoes I bought last week.
+Output: {{"facts" : ["Customer name: John Doe", "Wants to return shoes", "Purchase made last week"]}}
+
+Return the facts and customer information in a json format as shown above.
+"""
+
+Mem0 vs. Retrieval-Augmented Generation (RAG)
+
+Mem0’s memory implementation for Large Language Models (LLMs) offers several advantages over Retrieval-Augmented Generation (RAG):
+
+    Dynamic Interaction Memory: Unlike static document-based retrieval systems like RAG, Mem0 can adapt and modify its memory continuously based on real-time interactions, making it more responsive to user input as the conversation evolves.
+
+    Prioritized Relevance & Controlled Forgetting: Mem0 employs advanced algorithms that emphasize the recency and relevance of information, while gradually discarding outdated or less pertinent data. This ensures that the system's responses remain accurate and aligned with the user's current needs.
+
+    Tailored Personalization: Mem0 stands out for its ability to deeply customize responses based on individual user profiles, whereas traditional RAG systems primarily focus on broad knowledge augmentation without the same level of personal user focus.
+
+    Session-Spanning Context Awareness: Mem0 can sustain continuity in user interactions over multiple sessions, preserving context and memory for extended engagement. This is especially beneficial in applications requiring long-term user interaction and memory retention.
+
+    Evolving User Personalization: Over time, Mem0 enhances its personalized responses by learning from user behaviour and feedback, continuously adapting to deliver more relevant and tailored interactions as the user’s preferences or needs evolve.
+
+If you want to learn how to build RAG systems, I recommend checking out Master RAG with LangChain: A Practical Guide for a comprehensive, step-by-step tutorial.
+Mem0 Application with Langchain Integration
+
+Build a Simple AI Healthcare Support Bot that uses the above components
+
+If you want to build more complex projects in LangChain, then I would recommend watching this YouTube Video: Mastering NL2SQL with LangChain and LangSmith
+
+Installing Packages
+
+pip install mem0 langchain_openai langchain_core
+
+Importing Necessary Libraries
+
+from mem0 import Memory
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+Custom Prompt
+
+custom_prompt = """
+Please only extract entities containing patient health information, appointment details, and user information. 
+Here are some few shot examples:
+
+Input: Hi.
+Output: {{"facts" : []}}
+
+Input: The weather is nice today.
+Output: {{"facts" : []}}
+
+Input: I have a headache and would like to schedule an appointment.
+Output: {{"facts" : ["Patient reports headache", "Wants to schedule an appointment"]}}
+
+Input: My name is Jane Smith, and I need to reschedule my appointment for next Tuesday.
+Output: {{"facts" : ["Patient name: Jane Smith", "Wants to reschedule appointment", "Original appointment: next Tuesday"]}}
+
+Input: I have diabetes and my blood sugar is high.
+Output: {{"facts" : ["Patient has diabetes", "Reports high blood sugar"]}}
+
+Return the facts and patient information in a json format as shown above.
+"""
+
+The provided custom prompt is designed to guide Mem0 in extracting relevant patient health information, appointment details, and user data from user interactions. It instructs the system to focus solely on pertinent entities while providing a clear format for output in JSON.
+
+Mem0 configuration
+
+config = {
+    "llm": {
+        "provider": "openai",
+        "config": {
+            "model": "gpt-4o",
+            "temperature": 0.1,
+            "max_tokens": 2000,
+        }
+    },
+    "embedder": {
+        "provider": "openai",
+        "config": {
+            "model": "text-embedding-3-large"
+        }
+    },
+    "vector_store": {
+        "provider": "qdrant",
+        "config": {
+            "collection_name": "test",
+            "embedding_model_dims": 3072,
+        }
+    },
+    "custom_prompt": custom_prompt,
+    "version": "v1.1",
+}
+
+The provided configuration creates a Mem0 instance optimized for memory management and interaction. It utilizes OpenAI's GPT-4o model with a low temperature of 0.1 for focused responses and a max token limit of 2000. The configuration also includes OpenAI's text-embedding-3-large model for enhanced contextual understanding and employs Qdrant as the vector store with a collection named "test" and an embedding dimension of 3072. Additionally, the custom prompt ensures that the AI extracts relevant patient health information in a structured JSON format, facilitating tailored responses in healthcare scenarios.
+
+AI Healthcare Support Bot
+
+class AIHealthcareSupport:
+    def __init__(self, config):
+        """
+        Initialize the AI Healthcare Support with Memory Configuration and Langchain OpenAI Chat Model.
+
+        :param config: Configuration for memory and model settings.
+        """
+        self.memory = Memory.from_config(config)
+        self.app_id = "app-1"
+        self.model = ChatOpenAI(model="gpt-4o")
+
+    def ask(self, question, user_id=None):
+        """
+        Ask a question to the AI and store the relevant facts in memory.
+
+        :param question: The question to ask the AI.
+        :param user_id: Optional user ID to associate with the memory.
+        :return: Response from the AI along with the original question.
+        """
+        # Retrieve relevant memories using the search_memory method
+        memories = self.search_memory(question, user_id=user_id)
+
+        context = "Relevant information from previous conversations:\n"
+        if memories['results']:
+            for memory in memories['results']:
+                context += f" - {memory['memory']}\n"
+
+        messages = [
+            SystemMessage(content=f"""You are a helpful healthcare support assistant. Use the provided context to personalize your responses and remember user health information and past interactions. {context}"""), 
+            HumanMessage(content=question)
+        ]
+
+        response = self.model.invoke(messages)
+
+        # Store the interaction in memory
+        self.add_memory(question, response.content, user_id=user_id)
+        return {"messages": [response.content]}
+
+    def add_memory(self, question, response, user_id=None):
+        """
+        Add a memory entry to the memory store.
+
+        :param question: The question that was asked by the user.
+        :param response: The response generated by the AI.
+        :param user_id: Optional user ID to associate with the memory.
+        """
+        self.memory.add(f"User: {question}\nAssistant: {response}", user_id=user_id, metadata={"app_id": self.app_id})
+
+    def get_memories(self, user_id=None):
+        """
+        Retrieve all memories associated with the given user ID.
+
+        :param user_id: Optional user ID to filter memories.
+        :return: List of memories.
+        """
+        return self.memory.get_all(user_id=user_id)
+
+    def search_memory(self, query, user_id=None):
+        """
+        Search for memories related to the given query and user ID.
+
+        :param query: The query to search for in the memories.
+        :param user_id: Optional user ID to filter memories.
+        :return: List of relevant memories.
+        """
+        related_memories = self.memory.search(query, user_id=user_id)
+        return related_memories
+
+The AIHealthcareSupport class provides personalized healthcare assistance using a memory-enabled AI model. It initializes with a memory configuration and the GPT-4o chat model. The ask method retrieves relevant memories to provide context for user questions, invokes the chat model for a response, and stores the interaction in memory. The class also includes methods to add memories (add_memory), retrieve all memories for a user (get_memories), and search for specific memories related to a query (search_memory). This structure enables the assistant to deliver contextually relevant and personalized interactions.
+
+Load the AI Bot
+
+# Initialize the AIHealthcareSupport bot
+ai_support = AIHealthcareSupport(config)
+# User ID for interaction
+user_id = "James"
+
+Ask Questions
+
+# Interacting with the bot
+print("Interacting with AI Healthcare Support:\n")
+
+# Example interactions
+questions = [
+    "I have a family history of diabetes; how can I reduce my risk?",  # Preventive care inquiry
+    "Can you recommend any specific dietary changes?",  # Focusing on diet
+    "I have a headache and would like to schedule an appointment."
+]
+
+# Loop through each question, ask the bot, and print responses
+for question in questions:
+    response = ai_support.ask(question, user_id=user_id)
+    print(f"User: {question}")
+    print(f"AI: {response['messages'][0]}\n")
+
+For every question asked, our AI bot stores the relevant memory extracted from the conversation and retrieves it when needed to provide accurate answers. For example, when a user asks, "Can you recommend any specific dietary changes?" the bot retrieves the relevant memory, such as “Patient has a family history of diabetes,” to suggest dietary adjustments that will help reduce the patient's risk of developing diabetes. This approach ensures personalized, context-aware responses based on the user’s history.
+
+User: Can you recommend any specific dietary changes?
+
+AI: To help reduce your risk of diabetes, especially considering your family history, there are several dietary changes you can consider:
+
+1. Increase Fiber Intake: Aim to include more high-fiber foods in your diet, such as vegetables, fruits, whole grains, and legumes. Fiber can help regulate blood sugar levels and improve overall digestion.
+
+2. Choose Whole Grains: Opt for whole grains instead of refined grains. Whole grains have more nutrients and a lower glycemic index, which means they have a slower, more stable impact on blood sugar levels.
+
+3. Limit Sugary Foods and Beverages: Try to reduce your intake of added sugars. This includes sugary drinks, sweets, and processed snacks, which can cause spikes in blood sugar levels.
+
+See all the Memory Stored
+
+# Retrieve and display memories associated with the user
+memories = ai_support.get_memories(user_id=user_id)
+print("All Memories:")
+for memory in memories['results']:
+    print(f"- {memory}")
+
+Output: All Memories:
+
+    The patient has a family history of diabetes
+
+    Wants to know how to reduce diabetes risk
+
+    Patient reports headache
+
+    Wants to schedule an appointment
+
+Let us ask a Question from a Different User
+
+ai_support.ask("I've been experiencing some chest pain; what should I do?", user_id="Jacob")
+
+See all the Memory Stored
+
+Output: All Memories:
+
+    Patient reports experiencing chest pain
+
+For Jacob, the system creates a separate memory storage and has stored the information "Patient reports experiencing chest pain," distinct from James's memory. This ensures that the AI provides personalized responses for each user. It retains information across different sessions and interactions, maintaining continuity and relevant context for both users and AI agents.
+Conclusion
+
+In conclusion, Mem0 offers a powerful and flexible solution for enhancing AI systems with memory capabilities, allowing for more personalized, context-aware interactions. Its graph-based memory, support for popular LLMs and databases, and custom prompts enable seamless adaptation to specific use cases, such as healthcare or customer support. By integrating Mem0 into Langchain-based AI applications, developers can create more intelligent and responsive systems that continuously evolve with user interactions, improving the overall user experience. With managed and open-source options, Mem0 empowers developers to build memory-augmented AI solutions tailored to their needs.
+Resources and Further Reading
+
+Mem0 Documentation
+
+Langchain Doc
+
+Tutorial Notebook
+
+Thank you for reading, and we hope you found this blog post helpful!
+
+Follow FutureSmart AI to stay up-to-date with the latest and most fascinating AI-related blogs - FutureSmart AI
+
+Looking to catch up on the latest AI tools and applications? Look no further than AI Demos This directory features a wide range of video demonstrations showcasing the latest and most innovative AI technologies. Whether you're an AI enthusiast, researcher, or simply curious about the possibilities of this exciting field, AI Demos is your go-to resource for education and inspiration. Explore the future of AI today with AI Demos
+Next Steps: Bringing AI into Your Business
+
+Whether you're looking to integrate cutting-edge NLP models or deploy multimodal AI systems, we're here to support your journey. Reach out to us at contact@futuresmart.ai to learn more about how we can help.
+
+Don't forget to check out our futuresmart.ai/case-studies to see how we've successfully partnered with companies to implement transformative AI solutions.
+
+Let us help you take the next step in your AI journey.
+Mem0
+langchain
+natural language processing
+llm
+ai agents
+Written by
+Shreyas Dhaware
+Shreyas Dhaware
+Pradip Nichite
+Pradip Nichite
+

@@ -1,7 +1,9 @@
+import { Memory } from 'mem0';
 import { Message } from '@/types/chat';
 import { VectorResult } from '@/lib/knowledge/types';
 import { getEmbedding } from '@/lib/knowledge/embeddings';
 import { insertVector, searchSimilarContent } from '@/lib/milvus/vectors';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 interface MemoryEntry {
   id: string;
@@ -12,6 +14,69 @@ interface MemoryEntry {
 }
 
 export class MemoryService {
+  private mem0: Memory;
+  private genAI: GoogleGenerativeAI;
+  private model: any;
+
+  constructor() {
+    // Initialize Mem0 with configuration
+    const config = {
+      "llm": {
+        "provider": "google",
+        "config": {
+          "model": "gemini-pro",
+          "temperature": 0.1,
+          "max_tokens": 2000,
+        }
+      },
+      "embedder": {
+        "provider": "google",
+        "config": {
+          "model": "embedding-001"
+        }
+      },
+      "vector_store": {
+        "provider": "milvus",
+        "config": {
+          "collection_name": "aivy_memories",
+          "embedding_model_dims": 768,
+          "address": process.env.MILVUS_ADDRESS || 'localhost:19530',
+          "username": process.env.MILVUS_USERNAME,
+          "password": process.env.MILVUS_PASSWORD
+        }
+      },
+      "custom_prompt": this.getCustomPrompt(),
+      "version": "v1.1"
+    };
+
+    this.mem0 = Memory.from_config(config);
+    this.genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
+    this.model = this.genAI.getGenerativeModel({ model: "gemini-pro" });
+  }
+
+  private getCustomPrompt(): string {
+    return `
+    Please extract key information from the interaction that includes:
+    - User learning preferences
+    - Topics discussed
+    - Questions asked
+    - Understanding level
+    - Emotional state
+    
+    Example:
+    Input: "I prefer visual explanations and I'm struggling with math concepts"
+    Output: {
+      "facts": [
+        "Learning style: visual",
+        "Subject difficulty: math",
+        "Emotional state: struggling"
+      ]
+    }
+    
+    Return the facts in JSON format as shown above.
+    `;
+  }
+
   async addMemory(
     messages: Message[], 
     userId: string, 
@@ -24,21 +89,12 @@ export class MemoryService {
         metadataKeys: Object.keys(metadata)
       });
 
-      if (!messages.length) {
-        throw new Error('No messages provided to add to memory');
-      }
-
       const lastMessage = messages[messages.length - 1];
-      console.log('Generating embedding for last message:', {
-        role: lastMessage.role,
-        contentLength: lastMessage.content.length
-      });
-
+      
+      // Generate embedding using Google's embedding model
       const embedding = await getEmbedding(lastMessage.content);
-      console.log('Embedding generated successfully:', {
-        embeddingLength: embedding.length
-      });
 
+      // Create memory entry
       const memoryEntry: MemoryEntry = {
         id: crypto.randomUUID(),
         messages,
@@ -47,12 +103,18 @@ export class MemoryService {
         timestamp: new Date()
       };
 
-      console.log('Created memory entry:', {
-        id: memoryEntry.id,
-        timestamp: memoryEntry.timestamp
-      });
+      // Add to Mem0
+      await this.mem0.add(
+        lastMessage.content,
+        userId,
+        {
+          ...metadata,
+          messageId: memoryEntry.id,
+          timestamp: memoryEntry.timestamp
+        }
+      );
 
-      // Insert vector with metadata
+      // Store in Milvus
       await insertVector({
         userId,
         contentType: 'memory',
@@ -64,19 +126,10 @@ export class MemoryService {
         }
       });
 
-      console.log('Memory vector inserted successfully:', {
-        memoryId: memoryEntry.id,
-        userId
-      });
-
       return memoryEntry;
 
     } catch (error) {
-      console.error('Error adding memory:', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        userId,
-        timestamp: new Date().toISOString()
-      });
+      console.error('Error adding memory:', error);
       throw error;
     }
   }
@@ -87,83 +140,64 @@ export class MemoryService {
     limit: number = 5
   ): Promise<MemoryEntry[]> {
     try {
-      console.log('Starting memory search:', {
-        userId,
-        queryLength: query.length,
-        limit
-      });
+      // Search using Mem0
+      const mem0Results = await this.mem0.search(query, userId);
 
+      // Search using Milvus
       const embedding = await getEmbedding(query);
-      console.log('Search embedding generated:', {
-        embeddingLength: embedding.length
-      });
-
-      const searchEmbedding = Array.from(embedding);
-
-      const results = await searchSimilarContent({
+      const milvusResults = await searchSimilarContent({
         userId,
-        embedding: searchEmbedding,
+        embedding: Array.from(embedding),
         limit,
         contentTypes: ['memory']
       });
 
-      if (!results || !Array.isArray(results)) {
-        console.warn('No results returned from search:', {
-          userId,
-          timestamp: new Date().toISOString()
-        });
-        return [];
-      }
+      // Combine and deduplicate results
+      const combinedResults = new Map<string, MemoryEntry>();
 
-      console.log('Search completed:', {
-        resultCount: results.length,
-        userId
+      // Add Mem0 results
+      mem0Results.results.forEach(result => {
+        if (result.metadata?.messageId) {
+          combinedResults.set(result.metadata.messageId, {
+            id: result.metadata.messageId,
+            messages: JSON.parse(result.metadata?.messages || '[]'),
+            metadata: result.metadata,
+            userId: result.user_id,
+            timestamp: new Date(result.created_at)
+          });
+        }
       });
 
-      const memories = results.map((result: VectorResult) => {
-        try {
+      // Add Milvus results
+      milvusResults.forEach((result: VectorResult) => {
+        if (!combinedResults.has(result.content_id)) {
           const parsedMetadata = JSON.parse(result.metadata);
-          return {
+          combinedResults.set(result.content_id, {
             id: result.content_id,
             messages: JSON.parse(parsedMetadata.messages),
             metadata: JSON.parse(parsedMetadata.metadata),
             userId: result.user_id,
             timestamp: new Date()
-          };
-        } catch (parseError) {
-          console.error('Error parsing memory result:', {
-            error: parseError instanceof Error ? parseError.message : 'Unknown error',
-            resultId: result.content_id
           });
-          return null;
         }
-      }).filter((memory): memory is MemoryEntry => memory !== null);
-
-      console.log('Memory results processed:', {
-        processedCount: memories.length,
-        userId
       });
 
-      return memories;
+      return Array.from(combinedResults.values())
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        .slice(0, limit);
 
     } catch (error) {
-      console.error('Error searching memories:', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        userId,
-        timestamp: new Date().toISOString()
-      });
+      console.error('Error searching memories:', error);
       throw error;
     }
   }
 
   async deleteMemory(userId: string, memoryId: string): Promise<void> {
     try {
-      console.log('Starting memory deletion:', {
-        userId,
-        memoryId
-      });
+      // Delete from Mem0
+      await this.mem0.delete(memoryId, userId);
 
-      // Implementation for deleting memory would go here
+      // Implementation for deleting from Milvus would go here
       // This would typically involve removing the vector from Milvus
       // and any associated metadata
 
@@ -174,28 +208,8 @@ export class MemoryService {
       });
 
     } catch (error) {
-      console.error('Error deleting memory:', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        userId,
-        memoryId,
-        timestamp: new Date().toISOString()
-      });
+      console.error('Error deleting memory:', error);
       throw error;
     }
-  }
-
-  private validateMemoryEntry(entry: MemoryEntry): boolean {
-    if (!entry.id || !entry.userId || !Array.isArray(entry.messages)) {
-      return false;
-    }
-    
-    if (entry.messages.length === 0) {
-      return false;
-    }
-
-    return entry.messages.every(message => 
-      message.content && 
-      (message.role === 'user' || message.role === 'assistant')
-    );
   }
 }
