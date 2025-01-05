@@ -183,10 +183,10 @@ export async function POST(req: NextRequest) {
         confidence: "medium"
       },
       context: {
-        role: "tutor",
+        role: 'companion',
         analysis: {},
         recommendations: "",
-        previousMemories: memoryContext
+        previousMemories: relevantMemories
       },
       reactSteps: [],
       processedTensors

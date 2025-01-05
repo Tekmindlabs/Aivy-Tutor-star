@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mem0ai"
+version = "0.1.0"
+authors = [
+    { name="Your Name", email="your.email@example.com" },
+]
+description = "Memory management system for Aivy Tutor"
+requires-python = ">=3.8"
+dependencies = [
+    # Add your dependencies here
+    "numpy",
+    "pandas",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]

@@ -39,6 +39,20 @@ export interface HybridState extends AgentState {
     };
     recommendations: string;
     previousMemories?: Memory[];
+    // Add these missing properties
+    personalPreferences: {
+      interests?: string[];
+      communicationStyle?: string;
+      emotionalNeeds?: string[];
+      dailyRoutines?: string[];
+      supportPreferences?: string[];
+    };
+    relationshipDynamics: {
+      trustLevel?: string;
+      engagementStyle?: string;
+      connectionStrength?: string;
+      interactionHistory?: string[];
+    };
   };
   processedTensors?: {
     embedding: number[];
@@ -175,24 +189,26 @@ const relevantMemories = await memoryService.searchMemories(
         });
 
         // Step 5: Store interaction
-        const memoryEntry = {
-          messages: state.messages.map(msg => ({
-            content: msg.content,
-            role: msg.role,
-            createdAt: new Date().toISOString()
-          })),
-          metadata: {
-            emotionalState: emotionalAnalysis.emotionalState,
-            context: state.context,
-            reactStep
-          }
-        };
+        // Step 5: Store interaction
+const memoryEntry = {
+  messages: state.messages.map(msg => ({
+    id: crypto.randomUUID(), // Add unique ID for each message
+    content: msg.content,
+    role: msg.role,
+    createdAt: new Date().toISOString()
+  })),
+  metadata: {
+    emotionalState: emotionalAnalysis.emotionalState,
+    context: state.context,
+    reactStep
+  }
+};
 
-        await memoryService.addMemory(
-          memoryEntry.messages,
-          state.userId,
-          memoryEntry.metadata
-        );
+await memoryService.addMemory(
+  memoryEntry.messages,
+  state.userId,
+  memoryEntry.metadata
+);
 
         const responseText = response.response.text();
 
