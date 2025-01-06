@@ -6,7 +6,6 @@ import logging
 import datetime
 from typing import Optional, Dict, Any
 import google.generativeai as genai
-from qdrant_client import QdrantClient
 from jina import Document
 
 # Enhanced logging configuration
@@ -38,14 +37,15 @@ class Mem0Bridge:
                     }
                 },
                 "vector_store": {
-                    "provider": "milvus",
-                    "config": {
-                        "collection_name": "aivy_memories",
-                        "host": "localhost",
-                        "port": 19530,
-                        "embedding_model_dims": 768  # Jina embeddings dimension
-                    }
-                },
+    "provider": "milvus",
+    "config": {
+        "collection_name": "aivy_memories",
+        "url": os.getenv("MILVUS_URL"),  # Get URL from environment variable
+        "embedding_model_dims": 768,      # Keep your Jina embeddings dimension
+        "token": os.getenv("MILVUS_TOKEN"),  # Get token from environment variable
+        "metric_type": "L2"  # Optional, using default metric type
+    }
+},
                 "version": "v1.1"
             }
             
