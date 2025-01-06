@@ -204,3 +204,5 @@ function validateEmbedding(embedding: number[]): boolean {
   
   return true;
 }
+
+
