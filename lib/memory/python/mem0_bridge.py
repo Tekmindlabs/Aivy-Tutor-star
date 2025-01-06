@@ -5,6 +5,9 @@ from mem0ai import Memory
 import logging
 import datetime
 from typing import Optional, Dict, Any
+import google.generativeai as genai
+from qdrant_client import QdrantClient
+from jina import Document
 
 # Enhanced logging configuration
 logging.basicConfig(
@@ -17,33 +20,37 @@ class Mem0Bridge:
     def __init__(self):
         """Initialize the Mem0Bridge with configuration and memory system."""
         try:
-            # Configuration for open source usage
+            # Configuration for Google Gen AI, Milvus and Jina
             self.config = {
                 "llm": {
-                    "provider": "openai",
+                    "provider": "google",
                     "config": {
-                        "model": "gpt-4o",
+                        "api_key": os.getenv("GOOGLE_API_KEY"),
+                        "model": "gemini-pro",
                         "temperature": 0.1,
                         "max_tokens": 2000,
                     }
                 },
                 "embedder": {
-                    "provider": "openai",
+                    "provider": "jina",
                     "config": {
-                        "model": "text-embedding-3-small"
+                        "model": "jina-embeddings-v2-base-en"
                     }
                 },
                 "vector_store": {
-                    "provider": "qdrant",
+                    "provider": "milvus",
                     "config": {
                         "collection_name": "aivy_memories",
                         "host": "localhost",
-                        "port": 6333,
-                        "embedding_model_dims": 1536
+                        "port": 19530,
+                        "embedding_model_dims": 768  # Jina embeddings dimension
                     }
                 },
                 "version": "v1.1"
             }
+            
+            # Initialize Google Gen AI
+            genai.configure(api_key=self.config["llm"]["config"]["api_key"])
             
             # Initialize memory system
             self.memory = Memory.from_config(self.config)
@@ -82,7 +89,10 @@ class Mem0Bridge:
             metadata = metadata or {}
             metadata['timestamp'] = datetime.datetime.utcnow().isoformat()
             
-            result = self.memory.add(content, user_id=user_id, metadata=metadata)
+            # Create Jina Document
+            doc = Document(text=content)
+            
+            result = self.memory.add(doc, user_id=user_id, metadata=metadata)
             
             return {
                 "success": True,
@@ -117,7 +127,10 @@ class Mem0Bridge:
             if limit < 1:
                 raise ValueError("Limit must be greater than 0")
 
-            results = self.memory.search(query, user_id=user_id)
+            # Create Jina Document for query
+            query_doc = Document(text=query)
+            
+            results = self.memory.search(query_doc, user_id=user_id)
             
             return {
                 "success": True,
