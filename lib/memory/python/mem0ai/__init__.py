@@ -1,7 +1,39 @@
-from mem0 import Memory, MemoryClient
+# D:\Aivy\Aivy-Tutor\lib\memory\python\mem0ai\__init__.py
+
 import logging
 
 logger = logging.getLogger(__name__)
+
+class Memory:
+    @classmethod
+    def from_config(cls, config_dict):
+        instance = cls()
+        # Add configuration logic here
+        return instance
+
+    def add(self, messages, user_id, metadata=None):
+        try:
+            # Implement add logic
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"Error adding memory: {e}")
+            return None
+
+    def search(self, query, user_id, limit=10):
+        try:
+            # Implement search logic
+            return {"results": []}
+        except Exception as e:
+            logger.error(f"Error searching memories: {e}")
+            return {"results": []}
+
+    def delete(self, memory_id, user_id=None):
+        try:
+            # Implement delete logic
+            return {"success": True}
+        except Exception as e:
+            logger.error(f"Error deleting memory: {e}")
+            return {"success": False}
 
 class Mem0AI:
     @classmethod

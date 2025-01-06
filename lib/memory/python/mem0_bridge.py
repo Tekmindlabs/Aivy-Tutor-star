@@ -1,12 +1,14 @@
+
 import sys
 import json
 import os
-from mem0ai import Memory
+from mem0ai import Mem0AI as Memory  # Updated import
 import logging
 import datetime
 from typing import Optional, Dict, Any
 import google.generativeai as genai
-from jina import Document
+
+
 
 # Enhanced logging configuration
 logging.basicConfig(
@@ -37,15 +39,15 @@ class Mem0Bridge:
                     }
                 },
                 "vector_store": {
-    "provider": "milvus",
-    "config": {
-        "collection_name": "aivy_memories",
-        "url": os.getenv("MILVUS_URL"),  # Get URL from environment variable
-        "embedding_model_dims": 768,      # Keep your Jina embeddings dimension
-        "token": os.getenv("MILVUS_TOKEN"),  # Get token from environment variable
-        "metric_type": "L2"  # Optional, using default metric type
-    }
-},
+                    "provider": "milvus",
+                    "config": {
+                        "collection_name": "aivy_memories",
+                        "url": os.getenv("MILVUS_URL"),
+                        "embedding_model_dims": 768,
+                        "token": os.getenv("MILVUS_TOKEN"),
+                        "metric_type": "L2"
+                    }
+                },
                 "version": "v1.1"
             }
             
@@ -81,18 +83,17 @@ class Mem0Bridge:
         try:
             self._check_memory_initialized()
             
-            # Ensure content and user_id are not empty
             if not content or not user_id:
                 raise ValueError("Content and user_id cannot be empty")
 
-            # Add timestamp to metadata
             metadata = metadata or {}
             metadata['timestamp'] = datetime.datetime.utcnow().isoformat()
             
-            # Create Jina Document
-            doc = Document(text=content)
-            
-            result = self.memory.add(doc, user_id=user_id, metadata=metadata)
+            result = self.memory.add(
+                content=content,
+                user_id=user_id,
+                metadata=metadata
+            )
             
             return {
                 "success": True,
@@ -120,21 +121,21 @@ class Mem0Bridge:
         try:
             self._check_memory_initialized()
             
-            # Validate inputs
             if not query or not user_id:
                 raise ValueError("Query and user_id cannot be empty")
             
             if limit < 1:
                 raise ValueError("Limit must be greater than 0")
-
-            # Create Jina Document for query
-            query_doc = Document(text=query)
             
-            results = self.memory.search(query_doc, user_id=user_id)
+            results = self.memory.search(
+                query=query,
+                user_id=user_id,
+                limit=limit
+            )
             
             return {
                 "success": True,
-                "results": results["memories"][:limit]
+                "results": results.get("results", [])
             }
         except Exception as e:
             logger.error(f"Search error: {str(e)}")
@@ -157,11 +158,10 @@ class Mem0Bridge:
         try:
             self._check_memory_initialized()
             
-            # Validate inputs
             if not user_id or not memory_id:
                 raise ValueError("User_id and memory_id cannot be empty")
 
-            result = self.memory.delete(memory_id)
+            result = self.memory.delete(memory_id=memory_id, user_id=user_id)
             
             return {
                 "success": True,
@@ -177,7 +177,6 @@ class Mem0Bridge:
 def main():
     """Main entry point for the bridge script."""
     try:
-        # Validate command-line arguments
         if len(sys.argv) < 3:
             raise ValueError("Usage: script.py <command> <json_args>")
 
@@ -187,10 +186,8 @@ def main():
         except json.JSONDecodeError:
             raise ValueError("Invalid JSON arguments")
 
-        # Initialize bridge
         bridge = Mem0Bridge()
 
-        # Execute command
         result = None
         if command == "search":
             if not all(k in args for k in ["query", "userId"]):
