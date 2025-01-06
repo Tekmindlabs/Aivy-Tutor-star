@@ -2,6 +2,26 @@ import { PythonShell, Options } from 'python-shell';
 import path from 'path';
 import fs from 'fs';
 
+export interface MemoryMetadata {
+  content_type?: string;
+  content_id?: string;
+  timestamp?: string;
+  [key: string]: any;
+}
+
+export interface CreateMemoryParams {
+  content: string;
+  userId: string;
+  metadata?: MemoryMetadata;
+}
+
+export interface UpdateMemoryParams {
+  memoryId: string;
+  userId: string;
+  content?: string;
+  metadata?: MemoryMetadata;
+}
+
 export class Mem0Bridge {
   private pythonPath: string;
 
@@ -17,8 +37,8 @@ export class Mem0Bridge {
   private async runPythonCommand(command: string, args: any): Promise<any> {
     const options: Options = {
       mode: 'text' as const,
-      pythonPath: 'python', // Changed from python3 to python
-      pythonOptions: ['-u'], // Add unbuffered mode
+      pythonPath: 'python',
+      pythonOptions: ['-u'],
       args: [command, JSON.stringify(args)]
     };
 
@@ -40,16 +60,104 @@ export class Mem0Bridge {
     }
   }
 
-  async addMemory(content: string, userId: string, metadata?: Record<string, any>) {
-    return this.runPythonCommand('add', { content, userId, metadata });
+  /**
+   * Create a new memory entry
+   */
+  async createMemory({ content, userId, metadata }: CreateMemoryParams): Promise<any> {
+    if (!content || !userId) {
+      throw new Error('Content and userId are required for creating memory');
+    }
+
+    const enrichedMetadata = {
+      ...metadata,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Changed from 'create' to 'add' to match Python bridge commands
+    return this.runPythonCommand('add', {
+      content,
+      userId,
+      metadata: enrichedMetadata
+    });
   }
 
+  /**
+   * Add a memory entry (direct implementation instead of alias)
+   */
+  async addMemory(content: string, userId: string, metadata?: Record<string, any>) {
+    if (!content || !userId) {
+      throw new Error('Content and userId are required for adding memory');
+    }
+
+    const enrichedMetadata = {
+      ...metadata,
+      timestamp: new Date().toISOString(),
+    };
+
+    return this.runPythonCommand('add', {
+      content,
+      userId,
+      metadata: enrichedMetadata
+    });
+  }
+
+  /**
+   * Update an existing memory entry
+   */
+  async updateMemory({ memoryId, userId, content, metadata }: UpdateMemoryParams): Promise<any> {
+    if (!memoryId || !userId) {
+      throw new Error('MemoryId and userId are required for updating memory');
+    }
+
+    const updateData: any = {
+      memoryId,
+      userId,
+    };
+
+    if (content !== undefined) {
+      updateData.content = content;
+    }
+
+    if (metadata !== undefined) {
+      updateData.metadata = {
+        ...metadata,
+        updated_at: new Date().toISOString()
+      };
+    }
+
+    return this.runPythonCommand('update', updateData);
+  }
+
+  /**
+   * Search for memories
+   */
   async searchMemories(query: string, userId: string, limit: number = 5) {
+    if (!query || !userId) {
+      throw new Error('Query and userId are required for searching memories');
+    }
+
     return this.runPythonCommand('search', { query, userId, limit });
   }
-    async deleteMemory(userId: string, memoryId: string): Promise<any> {
-        return this.runPythonCommand('delete', { userId, memoryId });
+
+  /**
+   * Delete a memory entry
+   */
+  async deleteMemory(userId: string, memoryId: string): Promise<any> {
+    if (!userId || !memoryId) {
+      throw new Error('UserId and memoryId are required for deleting memory');
     }
+
+    return this.runPythonCommand('delete', { userId, memoryId });
+  }
+
+  /**
+   * Get a single memory by ID
+   */
+  async getMemory(userId: string, memoryId: string): Promise<any> {
+    if (!userId || !memoryId) {
+      throw new Error('UserId and memoryId are required for getting memory');
+    }
+
+    return this.runPythonCommand('get', { userId, memoryId });
+  }
 }
-
-

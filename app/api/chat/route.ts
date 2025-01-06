@@ -10,7 +10,7 @@ import { Message } from '@/types/chat';
 import { MemoryService } from '@/lib/memory/memory-service';
 import { EmbeddingModel } from '@/lib/knowledge/embeddings';
 import { MemoryTools } from '@/lib/memory/memory-tools';
-
+import { Memory } from '@/types/mem0'
 
 // Add this type definition
 
@@ -136,34 +136,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Search memories
-    // Search memories
+// route.ts - Fixed version
 currentStep = STEPS.MEMORY_SEARCH;
 const lastMessage = messages[messages.length - 1];
+
+if (!lastMessage?.content || !user?.id) {
+  console.warn('Missing required parameters for memory search');
+  return [];
+}
+
 const relevantMemories = await memoryService.searchMemories(
   lastMessage.content,
   user.id,
   5
-).then(entries => entries.map(entry => {
-  // Get the last message from the memory entry
-  const lastMemoryMessage = entry.messages[entry.messages.length - 1];
-  
-  return {
-    id: entry.id,
-    content: lastMemoryMessage?.content || '',
-    emotionalState: entry.metadata?.emotionalState || {
-      mood: "neutral",
-      confidence: "medium"
-    },
-    timestamp: entry.timestamp,
-    userId: entry.userId,
-    metadata: {
-      learningStyle: entry.metadata?.learningStyle,
-      difficulty: entry.metadata?.difficultyPreference,
-      interests: entry.metadata?.interests
-    }
-  };
-})).catch(error => {
+).then(entries => entries.map(entry => ({
+  id: entry.id,
+  content: Array.isArray(entry.messages) ? entry.messages[entry.messages.length - 1]?.content || '' : '',
+  emotionalState: entry.metadata?.emotionalState || {
+    mood: "neutral",
+    confidence: "medium"
+  },
+  timestamp: entry.timestamp,
+  userId: entry.userId,
+  metadata: {
+    learningStyle: entry.metadata?.learningStyle,
+    difficulty: entry.metadata?.difficultyPreference,
+    interests: entry.metadata?.interests
+  }
+}))).catch(error => {
   console.warn('Memory search failed:', error);
   return [];
 });
