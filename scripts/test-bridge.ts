@@ -1,6 +1,5 @@
 // scripts/test-bridge.ts
-
-import { Mem0Bridge } from '../lib/memory/bridge';  // Updated path to correctly point to the bridge module
+import { Mem0Bridge } from '../lib/memory/bridge';
 
 async function test() {
   try {
@@ -16,6 +15,10 @@ async function test() {
     );
     console.log('Add result:', addResult);
 
+    if (!addResult.success) {
+      throw new Error(`Add failed: ${addResult.error}`);
+    }
+
     // Test searching memory
     const searchResult = await bridge.searchMemories(
       "Test query",
@@ -23,10 +26,16 @@ async function test() {
     );
     console.log('Search result:', searchResult);
 
+    if (!searchResult.success) {
+      throw new Error(`Search failed: ${searchResult.error}`);
+    }
+
   } catch (error) {
     console.error('Test failed:', error);
   }
 }
 
-// Run the test
-test().catch(console.error);
+// Only run if not in browser
+if (typeof window === 'undefined') {
+  test().catch(console.error);
+}
