@@ -19,8 +19,7 @@ async function test() {
     // Test searching memory
     const searchResult = await bridge.searchMemories(
       "Test query",
-      "test-user-id",
-      5
+      "test-user-id"
     );
     console.log('Search result:', searchResult);
 

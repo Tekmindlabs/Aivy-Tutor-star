@@ -41,18 +41,18 @@ class DefaultMem0Client implements Mem0Client {
     }
   }
 
-  async search(query: string, userId: string, limit: number = 10): Promise<Mem0Response> {
+  async search(query: string, userId: string): Promise<Mem0Response> {
     try {
-      const results = await this.bridge.searchMemories(query, userId, limit);
-      return { success: true, results: { results } };
+        const results = await this.bridge.searchMemories(query, userId);
+        return { success: true, results: { results } };
     } catch (error) {
-      console.error('Error searching memories:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      };
+        console.error('Error searching memories:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Unknown error' 
+        };
     }
-  }
+}
 
   async delete(userId: string, memoryId: string): Promise<Mem0Response> {
     try {

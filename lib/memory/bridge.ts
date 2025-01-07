@@ -44,9 +44,9 @@ export class Mem0Bridge {
     return this.runPythonCommand('add', { content, userId, metadata });
   }
 
-  async searchMemories(query: string, userId: string, limit: number = 5) {
-    return this.runPythonCommand('search', { query, userId, limit });
-  }
+  async searchMemories(query: string, userId: string) {
+    return this.runPythonCommand('search', { query, userId });
+}
     async deleteMemory(userId: string, memoryId: string): Promise<any> {
         return this.runPythonCommand('delete', { userId, memoryId });
     }
