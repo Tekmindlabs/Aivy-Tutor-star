@@ -80,23 +80,12 @@ class Mem0Bridge:
         """
         try:
             self._check_memory_initialized()
-            
-            if not content or not user_id:
-                raise ValueError("Content and user_id cannot be empty")
-
             metadata = metadata or {}
-            metadata['timestamp'] = datetime.datetime.utcnow().isoformat()
-            
-            result = self.memory.add(
-                content=content,
-                user_id=user_id,
-                metadata=metadata
-            )
-            
-            return {
-                "success": True,
-                "result": result
-            }
+            metadata['timestamp'] = datetime.now()  # Correct datetime usage
+            return self.memory.add(content, user_id, metadata)
+        except Exception as e:
+            logging.error(f"Error adding memory: {str(e)}")
+            return {"success": False, "error": str(e)}
         except Exception as e:
             logger.error(f"Add memory error: {str(e)}")
             return {
