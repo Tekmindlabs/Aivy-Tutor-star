@@ -1,28 +1,22 @@
 import { getMem0Client } from './mem0-client';
 import { v4 as uuidv4 } from 'uuid';
 
-// Define interfaces for API responses
-interface SearchResponse {
-  results: Array<{
-    id?: string;
-    content_id?: string;
-    user_id: string;
-    content?: string;
-    metadata?: Record<string, any>;
-    score?: number;
-  }>;
-  success: boolean;
-  error?: string;
-}
-
-interface MemoryContent {
+// Define interfaces for memory content and results
+export interface MemoryContent {
   userId: string;
   contentType: string;
   content: string;
   metadata?: Record<string, any>;
 }
 
-interface SearchResult {
+export interface MemoryResult {
+  id: string;
+  userId: string;
+  contentType: string;
+  metadata: Record<string, any>;
+}
+
+export interface SearchResult {
   id: string;
   userId: string;
   contentType?: string;
@@ -32,8 +26,59 @@ interface SearchResult {
   metadata: Record<string, any>;
 }
 
+// Define interface for search response from mem0
+interface SearchResponse {
+  success: boolean;
+  error?: string;
+  results?: Array<{
+    id?: string;
+    content_id?: string;
+    user_id: string;
+    content?: string;
+    metadata?: Record<string, any>;
+    score?: number;
+  }>;
+}
+
 export class MemoryService {
   private memory = getMem0Client();
+
+  async addMemory({
+    userId,
+    contentType,
+    content,
+    metadata = {}
+  }: MemoryContent): Promise<MemoryResult> {
+    try {
+      const enrichedMetadata = {
+        ...metadata,
+        content_type: contentType,
+        content_id: uuidv4(),
+        timestamp: new Date().toISOString(),
+        version: 'v2'
+      };
+
+      const result = await this.memory.add(
+        content,
+        userId,
+        enrichedMetadata
+      );
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to add memory');
+      }
+
+      return {
+        id: enrichedMetadata.content_id,
+        userId,
+        contentType,
+        metadata: enrichedMetadata
+      };
+    } catch (error) {
+      console.error('Error adding memory:', error);
+      throw new Error('Failed to add memory');
+    }
+  }
 
   async searchMemories(
     query: string,
@@ -46,32 +91,19 @@ export class MemoryService {
     }
 
     try {
-      // Create search parameters object according to v2 API
-      const searchParams = {
-        query,
-        filters: {
-          AND: [
-            { user_id: userId },
-            ...(filters ? [filters] : [])
-          ]
-        },
-        limit,
-        version: 'v2'
-      };
+      // Call the search method with the correct parameters
+      const result = await this.memory.search(query, userId, limit);
 
-      // Call the search endpoint with proper typing
-      const result = await this.memory.search<SearchResponse>(searchParams);
-
-      if (!result?.results) {
+      if (!result.success || !result.results?.results) {
         return [];
       }
 
       // Map the response to our internal format
-      return result.results.map((entry): SearchResult => ({
+      return result.results.results.map((entry): SearchResult => ({
         id: entry.content_id || entry.id || uuidv4(),
         userId: entry.user_id,
         contentType: entry.metadata?.content_type,
-        content: entry.content,
+        content: entry.metadata?.content,
         score: entry.score,
         timestamp: entry.metadata?.timestamp || new Date().toISOString(),
         metadata: entry.metadata || {}
@@ -99,6 +131,20 @@ export class MemoryService {
     } catch (error) {
       console.error('Error deleting memory:', error);
       throw new Error('Failed to delete memory');
+    }
+  }
+
+  async getAllMemories(userId: string): Promise<SearchResult[]> {
+    if (!userId) {
+      throw new Error('UserId is required for getting all memories');
+    }
+
+    try {
+      // Use an empty query to get all memories
+      return await this.searchMemories('', userId, 100);
+    } catch (error) {
+      console.error('Error getting all memories:', error);
+      throw new Error('Failed to get all memories');
     }
   }
 }
