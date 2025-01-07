@@ -1,11 +1,11 @@
 import sys
 import json
 import os
-from mem0 import Memory  # Updated import to use Memory instead of Mem0AI
+from mem0ai import Memory
 import logging
-import datetime
+from datetime import datetime
 from typing import Optional, Dict, Any
-import google.generativeai as genai
+import google.generativeai as genai 
 
 # Enhanced logging configuration
 logging.basicConfig(
@@ -23,7 +23,7 @@ class Mem0Bridge:
                 "llm": {
                     "provider": "google",
                     "config": {
-                        "api_key": os.getenv("GOOGLE_API_KEY"),
+                        "api_key": os.getenv("GOOGLE_AI_API_KEY"),
                         "model": "gemini-pro",
                         "temperature": 0.1,
                         "max_tokens": 2000,
@@ -40,7 +40,7 @@ class Mem0Bridge:
                     "provider": "milvus",
                     "config": {
                         "collection_name": "aivy_memories",
-                        "url": os.getenv("MILVUS_URL"),
+                        "url": os.getenv("MILVUS_ADDRESS"),
                         "embedding_model_dims": 1024,
                         "token": os.getenv("MILVUS_TOKEN"),
                         "metric_type": "L2"

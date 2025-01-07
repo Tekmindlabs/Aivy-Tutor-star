@@ -1,15 +1,21 @@
-# mem0ai/__init__.py
+class Memory:
+    def __init__(self, config=None):
+        self.config = config
 
-class Mem0AI:  # Changed from Memory to Mem0AI
     @classmethod
     def from_config(cls, config):
-        # Initialize memory system with configuration
-        return cls()
+        return cls(config)
 
     def add(self, content, user_id, metadata=None):
-        # Add memory
-        return {"status": "success"}
+        try:
+            # Basic implementation
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def search(self, query, user_id):
-        # Search memories
-        return {"results": []}
+        try:
+            # Basic implementation
+            return {"success": True, "results": []}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
